@@ -1,55 +1,130 @@
 import torch
 import torch.nn as nn
 
+# TODO definire dominio con shape e sample
+# TODO fare in modo che le costanti, variabili, funzioni e predicati prendano in input i propri domini, in questo
+# TODO modo si riesce ad evitare di tenere taccia delle dimensioni quando si creano le reti neurali
 
-def constant(value, trainable=False):
-    """Returns a torch.tensor that represents the grounding of an LTN constant (grounded with the value given in input).
+
+class Domain(object):
+    """Domain class for ltn.
+
+    An ltn domain defines the type of a constant, variable, function, or predicate. Intuitively, a domain could define
+    the possible values that a constant or variable can assume, the possible values that a function can take as input and
+    produce as output, and the possible values that a predicate can take as input.
+
+    Args:
+        shape: it is the shape of the domain. It must be a tuple of integers. For example, shape (3,4,2) defines the
+        domain of tensors of dimension (3,4,2). Notice that the shape defined the grounding of the domain. In
+        fact, a domain symbol is grounded as a set of tensor of size shape.
+        domain_name: it is a string containing the name of the domain, for example, 'people'.
+    Attributes:
+        shape: see shape argument.
+        domain_name: see domain_name argument.
+    """
+    def __init__(self, shape, domain_name):
+        if not isinstance(shape, tuple) and all(isinstance(v, int) for v in shape):
+            raise ValueError("The shape attribute must be a tuple of integers.")
+        self.shape = shape
+        self.domain_name = domain_name
+
+    def __repr__(self):
+        return "Domain(domain_name='" + self.domain_name + "', grounding=R^" + str(self.shape) + ")"
+
+    # TODO sample method to sample from the domain with a given distribution
+    '''
+    def sample(self, distribution, n=100):
+        """
+        It samples n samples from the distribution given in input
+        Args:
+            distribution: the distribution from which the samples have to be sampled
+            n: the number of samples to be sampled from the distribution
+        """
+    '''
+
+
+class Constant(object):
+    # TODO capire se aggiungere la batch dimension anche per la costante
+    """Constant class for ltn.
 
     An ltn constant denotes an individual grounded as a tensor in the Real field.
     The individual can be pre-defined (fixed data point) or learnable (embedding).
 
     Args:
-        value: a value to feed in the tensor. The value becomes the grounding of the individual.
+        constant_name: string containing the name of the constant.
+        domain: it is the domain of the LTN constant.
+        value: the value that becomes the grounding of the LTN constant. The value becomes the grounding of the
+        individual represented by the constant.
         trainable: whether the LTN constant is trainable or not. If False, the subgraph containing the constant
-        will be excluded from the gradient computation. Defaults to False.
+        will be excluded from the gradient computation. Defaults to False. If True, the constant is initialized using the
+        value parameter.
+    Attributes:
+        constant_name: see constant_name argument.
+        grounding: it is the grounding of the LTN constant. Specifically, it is a torch.tensor with shape depending on
+        the domain of the constant.
+        domain: see the domain argument.
+        free_variables: it is a list of string containing the labels of the free variables contained in the expression.
+        In the case of a constant, free_variables is empty since a constant does not contain variables.
     """
-    const = torch.tensor(value)
-    if trainable:
-        const.requires_grad = True
+    def __init__(self, constant_name, domain, value, trainable=False):
+        value = torch.tensor(value, requires_grad=trainable)
+        if value.shape != domain.shape:
+            raise ValueError("The value given for the constant does not match the constant's domain. The shape of the "
+                             " value must match the shape of the constant's domain.")
+        self.constant_name = constant_name
+        self.grounding = value
+        self.domain = domain
+        self.free_variables = []
 
-    const.active_doms = []  # this adds a new attribute to the torch.tensor. This attribute is an empty list because
-    # a constant does not have variables in it, so there is no need for a label.
+    def __repr__(self):
+        return "Constant(constant_name='" + self.constant_name + "', domain=" + repr(self.domain) + ", grounding=" \
+               + str(self.grounding) + ", free_variables=" + str(self.free_variables) + ")"
 
-    return const
 
+class Variable(object):
+    # TODO capire a cosa serve latent_dom
+    """Variable class for ltn.
 
-def variable(label, individuals_seq):
-    """Returns a torch.tensor that represents the grounding of an LTN variable (grounded with the sequence of
-    individuals given in input).
-
-    A ltn variable denotes a sequence of individuals.
-    Axis 0 is the batch dimension: if `x` is an `ltn.variable`, `x[0]` gives the first individual,
-    `x[1]` gives the second individual, and so forth, the usual way.
+    An ltn variable denotes a sequence of individuals. It is grounded as a sequence of tensors (groundings of
+    individuals) in the real field.
+    Axis 0 is the batch dimension: if `x` is an `ltn.Variable`, `x[0]` gives the first individual,
+    `x[1]` gives the second individual, and so forth, i.e., the usual way.
 
     Args:
-        label: string. In ltn, variables need to be labelled.
-        individuals_seq: A sequence of individuals to feed in a tensor.
-            Alternatively, a tensor to use as is (with some dynamically added attributes, like active_doms).
+        variable_name: it is a string containing the name of the variable, for example 'x'.
+        domain: it is the domain of the LTN variable.
+        individual_seq: it is a sequence of individuals (sequence of tensors) to ground the ltn variable.
+            Alternatively, a tensor to use as is.
+    Attributes:
+        grounding: it is the grounding of the LTN variable. Specifically, it is a torch.tensor with shape depending on
+        the domain of the variable.
+        domain: see the domain argument.
+        free_variables: it is a list of string containing the labels of the free variables contained in the expression.
+        In this case, since we have just a variable, free_variables will contain the variable itself.
     """
-    if label.startswith("diag"):
-        raise ValueError("Labels starting with diag are reserved.")
-    if isinstance(individuals_seq, torch.FloatTensor):
-        var = individuals_seq
-    else:
-        var = torch.tensor(individuals_seq)
+    def __init__(self, variable_name, domain, individuals_seq):
+        if isinstance(individuals_seq, torch.FloatTensor):
+            grounding = individuals_seq
+        else:
+            grounding = torch.tensor(individuals_seq)
+        if grounding[0].shape != domain.shape:
+            raise ValueError("The shape of the given individuals does not match the shape of the variable's domain. "
+                             " The shape of the individuals must match the shape of the variable's domain.")
+        if len(grounding.shape) == 1:
+            # add a dimension if there is only one individual in the sequence, since axis 0 represents the batch dimension
+            grounding = grounding.view(1, grounding.shape[0])
 
-    if len(var.shape) == 1:
-        # add a dimension if there is only one individual in the sequence, since axis 0 represents the batch dimension
-        var = var.view(1, var.shape[0])
-    var.latent_dom = label
-    var.active_doms = [label]
+        self.grounding = grounding
+        self.domain = domain
+        if variable_name.startswith("diag"):
+            raise ValueError("Labels starting with diag are reserved.")
+        self.variable_name = variable_name
+        self.free_variables = [variable_name]
 
-    return var
+    def __repr__(self):
+        return "Variable(variable_name='" + self.variable_name + "', domain=" + repr(self.domain) + \
+               ", individuals_number=" + str(self.grounding.shape[0]) + ", grounding=" + str(self.grounding) + \
+               ", free_variables=" + str(self.free_variables) + ")"
 
 
 def get_dim0_of_dom(grounding, dom):

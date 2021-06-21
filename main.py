@@ -14,29 +14,26 @@ class ModelP(torch.nn.Module):
         return self.sigmoid(self.dense2(x))
 
 def main():
-    c = [[3., 2.], [4.3, 5.4]]
-    con = ltn.constant(c)
-    #print(con)
-    v = ltn.variable('x', c)
     #print(v)
 
-    g = ltn.variable('g', [[2., 4.], [5., 3.], [7., 5.]])
-    h = ltn.variable('h', [[1., 5., 3.], [3., 4., 2.]])
-    l = ltn.variable('l', [[[3., 0.], [1., 7.]], [[3., 5.], [1., 0.]]])
+    d = ltn.Domain((2, 2), "d")
 
-    x = ltn.variable('x', [[2., 4.], [5., 6.]])
-    y = ltn.variable('y', [[2., 3.], [4., 7.], [5., 8.]])
-    z = ltn.variable('z', [[1., 3., 4.], [2., 7., 9.], [5., 8., 7.], [4., 3., 2.]])
+    x = ltn.Variable('x', d, [[[3., 4.], [2., 6.]], [[9.5, 4.9], [3.4, 5.6]]])
+
+    print(x)
+
+    new_const = ltn.Constant('c', d, [[3., 4.], [2., 5.]], trainable=True)
+
+    print(new_const)
 
     #print(cross_args([x, y, z], flatten_dim0=True))
     # print(cross_grounding_values([con], flatten_dim0=True))
     #print(con)
-    const = ltn.constant([3., 4.])
     modelP = ModelP()
     # P = ltn.Predicate(modelP)
-    print(g)
-    P = ltn.Predicate.MLP([2, 16, 14, 12, 1])
-    print(P(g))
+    #print(g)
+    #P = ltn.Predicate.MLP([2, 16, 14, 12, 1])
+    #print(P(g))
 
 
 if __name__ == "__main__":

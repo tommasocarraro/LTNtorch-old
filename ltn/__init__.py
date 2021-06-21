@@ -1,1 +1,1 @@
-from ltn.core import constant, variable, Predicate
+from ltn.core import Variable, Predicate, Constant, Domain
