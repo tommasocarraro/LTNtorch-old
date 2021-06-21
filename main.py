@@ -1,6 +1,8 @@
 import ltn
 import torch
-from ltn.core import cross_grounding_values
+from ltn.core import cross_grounding_values_of_symbols
+
+
 
 class ModelP(torch.nn.Module):
     def __init__(self):
@@ -16,17 +18,18 @@ class ModelP(torch.nn.Module):
 def main():
     #print(v)
 
-    d = ltn.Domain((2, 2), "d")
+    d1 = ltn.Domain((2, 2), "d1")
+    d2 = ltn.Domain((3, 4), "d2")
 
-    x = ltn.Variable('x', d, [[[3., 4.], [2., 6.]], [[9.5, 4.9], [3.4, 5.6]]])
+    x = ltn.Variable('x', d1, [[[3., 4.], [2., 6.]], [[9.5, 4.9], [3.4, 5.6]]])
+    y = ltn.Variable('y', d2, [[[3., 4., 4., 3.], [2., 6., 5., 4.], [4., 3., 5., 3.]], [[3., 4., 3., 3.],
+                            [2., 6., 5., 4.], [4., 3., 5., 3.]], [[3., 4., 3., 3.], [2., 6., 5., 4.], [4., 3., 5., 3.]]])
 
-    print(x)
+    new_const = ltn.Constant('c', d1, [[3., 4.], [2., 5.]], trainable=True)
 
-    new_const = ltn.Constant('c', d, [[3., 4.], [2., 5.]], trainable=True)
+    p = ltn.Predicate('p', d1, model)
 
-    print(new_const)
-
-    #print(cross_args([x, y, z], flatten_dim0=True))
+    print(cross_grounding_values_of_symbols([x, y]))
     # print(cross_grounding_values([con], flatten_dim0=True))
     #print(con)
     modelP = ModelP()
