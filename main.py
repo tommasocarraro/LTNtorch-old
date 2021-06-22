@@ -31,6 +31,14 @@ def main():
 
     P1 = ltn.Predicate("p1", [points], lambda_func=lambda x: torch.exp(-torch.norm(x - mu, dim=1)))
 
+    f1 = ltn.Function("f1", [d_img, l_img], d_img, layers_size=(7, 4, 2, 4, 2, 4))
+
+    print(imgs)
+
+    f1([imgs, labels])
+
+    print(imgs)
+
     print(P1([var_point]))
 
     print(P1([c]))
