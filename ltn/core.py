@@ -1,5 +1,7 @@
 import torch
 from torch import nn
+import math
+import numpy as np
 
 # TODO definire dominio con shape e sample
 # TODO fare in modo che le costanti, variabili, funzioni e predicati prendano in input i propri domini, in questo
@@ -23,8 +25,8 @@ class Domain(object):
         domain_name: see domain_name argument.
     """
     def __init__(self, shape, domain_name):
-        if not isinstance(shape, tuple) and all(isinstance(v, int) for v in shape):
-            raise ValueError("The shape attribute must be a tuple of integers.")
+        if not isinstance(shape, list) and all(isinstance(v, int) for v in shape):
+            raise ValueError("The shape attribute must be a list of integers.")
         self.shape = shape
         self.domain_name = domain_name
 
@@ -68,9 +70,9 @@ class Constant(object):
     """
     def __init__(self, constant_name, domain, value, trainable=False):
         value = torch.tensor(value, requires_grad=trainable)
-        if value.shape != domain.shape:
+        if value.shape != torch.Size(domain.shape):
             raise ValueError("The value given for the constant does not match the constant's domain. The shape of the "
-                             " value must match the shape of the constant's domain.")
+                             "value must match the shape of the constant's domain.")
         self.constant_name = constant_name
         self.grounding = value
         self.domain = domain
@@ -107,9 +109,10 @@ class Variable(object):
             grounding = individuals_seq
         else:
             grounding = torch.tensor(individuals_seq)
-        if grounding[0].shape != domain.shape:
+        if grounding[0].shape != torch.Size(domain.shape):
             raise ValueError("The shape of the given individuals does not match the shape of the variable's domain. "
                              " The shape of the individuals must match the shape of the variable's domain.")
+
         if len(grounding.shape) == 1:
             # add a dimension if there is only one individual in the sequence, since axis 0 represents the batch dimension
             grounding = grounding.view(1, grounding.shape[0])
@@ -140,7 +143,7 @@ def cross_grounding_values_of_symbols(symbols, flatten_dim0=False):
     These symbols can be ltn variables, constants, functions, predicates, or any expression built on those.
 
     It returns a list of tensors containing the combinations of values of the groundings of the input symbols. Each one
-    of these tensors is a component of the combination. If these tensors are concatenated along axis 0, the combinations
+    of these tensors is a component of the combination. If these tensors are concatenated along axis 1, the combinations
     are generated. The output list contains one tensor per input symbol.
 
     Moreover, it returns a list of variable labels and a list containing the number of individuals for each variable.
@@ -179,6 +182,7 @@ def cross_grounding_values_of_symbols(symbols, flatten_dim0=False):
             shape_list = [-1] + list(symbol_grounding.shape[len(vars_in_symbol)::])
             symbol_grounding = torch.reshape(symbol_grounding, shape=tuple(shape_list))
         crossed_symbol_groundings.append(symbol_grounding)
+
     return crossed_symbol_groundings, vars, n_individuals_per_var
 
 
@@ -189,12 +193,12 @@ class Predicate(nn.Module):
     from some n-ary domain of individuals to a real number in [0,1] (fuzzy) that can be interpreted as a truth value.
     Examples of predicates can be similarity measures, classifiers, etc.
 
-    Predicates can be defined using any operations in Pytorch. They can be linear functions, Deep Neural Networks,
+    Predicates can be defined using any operations in PyTorch. They can be linear functions, Deep Neural Networks,
     and so forth.
 
     An ltn predicate implements a `nn.Module` instance that can "broadcast" ltn terms as follows:
     1. Evaluating a predicate with one variable of n individuals yields n output values,
-    where the i-th output value corresponds to the term calculated with the i-th individual.
+    where the i-th output value corresponds to the predicate calculated with the i-th individual.
     2. Evaluating a predicate with k variables (x1,...,xk) with respectively n1,...,nk
     individuals each, yields a result with n1*...*nk values. The result is organized in a tensor
     where the first k dimensions can be indexed to retrieve the outcome(s) that correspond to each variable.
@@ -203,61 +207,110 @@ class Predicate(nn.Module):
 
     Args:
         predicate_name: string containing the name of the predicate;
-        input_domain: the domain of the input of the predicate;
+        input_domain: list of domains of the inputs of the predicate;
         model: model that becomes the grounding of the predicate;
-
+        layers_size: if a model is not given, it is possible to give layers_size and an MLP with that layers will be
+        used as model;
+        lambda_func: if a model is not given and layers_size is not given, it is possible to give a lambda function.
+        In this case the lambda function will be used as predicate function instead of a learnable model.
     Attributes:
         predicate_name: see predicate_name argument;
         input_domain: see input_domain argument;
-        grounding: the grounding of the ltn predicate.
+        grounding: the grounding of the ltn predicate;
+        model_type: it is a string containing the type of the model (linear, lambda or conv);
+        free_variables: it is a list of string containing the labels of the free variables contained in the expression.
     """
-
-    def __init__(self, predicate_name, input_domain, model):
+    # TODO descrivere la lambda sui model type
+    def __init__(self, predicate_name, input_domain, model=None, layers_size=None, lambda_func=None):
         """Initializes the ltn predicate with the given nn.Module instance,
         wrapping it with the ltn-broadcasting mechanism."""
+        # TODO problema: un predicato puo' avere piu' input e bisogna gestirli
         super(Predicate, self).__init__()
+        if model is None and layers_size is None and lambda_func is None:
+            raise ValueError("A model, or dimension of layers for constructing a model, or a lambda function to be used"
+                             " as a non-trainable model should be given in input.")
+        if model is not None and (layers_size is not None or lambda_func is not None):
+            raise ValueError("A model has been given, so layers_size and lambda_func can't be given.")
+        if model is None and layers_size is not None and lambda_func is not None:
+            raise ValueError("Only one of layers_size and lambda_func can be given.")
+        if model is None and layers_size is not None:
+            model = self.MLP(layers_size)
+            self.model_type = "linear"
+        if model is None and lambda_func is not None:
+            model = self.lambda_operation(lambda_func)
+            self.model_type = "lambda"
+        assert isinstance(input_domain, list), "The input_domain should be a list of domains."
         self.predicate_name = predicate_name
         self.input_domain = input_domain
+        if isinstance(model, (nn.Sequential, nn.Module)) and self.model_type == "linear":
+            model_layers = [layer for layer in model.modules()]
+            first_layer = model_layers[1]  # in position 0 there is the copy of the model
+            if isinstance(first_layer, nn.Linear):
+                self.model_type = "linear"
+                first_layer_size = first_layer.in_features
+                flat_input_domain_size = sum([math.prod(list(domain.shape)) for domain in input_domain])
+                if first_layer_size != flat_input_domain_size:
+                    raise ValueError("The input layer size of the given model does not match the size of the input domain. "
+                                     "The size of the input layer must match the size of the input domain (sum of sizes"
+                                     " of input domains flattened).")
 
+        # TODO fare meglio questa parte della convolution perche' e' complicata, per ora i controlli sulle conv non
+        # sono implementati
+        '''
+        if isinstance(first_layer, (torch.nn.Conv1d, torch.nn.Conv2d, torch.nn.Conv3d)):
+            if len(input_domain.shape) != 3:
+                raise ValueError("The given model is a CNN model, but the input domain does not correspond to an image."
+                                 " An image should have three dimensions (width, height, depth). One or more dimensions "
+                                 "are missed.")
+        '''
         self.grounding = model
+        self.free_variables = []
 
     def forward(self, inputs, *args, **kwargs):
         """Encapsulates the "self.model.forward()" to handle the ltn-broadcasting.
 
         Args:
-            inputs: tensor or list of tensors that are ltn terms (ltn variable, ltn constant or
+            inputs: list of tensors that are ltn terms (ltn variable, ltn constant or
                     output of a ltn functions).
         Returns:
             outputs: tensor of truth values, with dimensions s.t. each variable corresponds to one axis.
         """
-        if not isinstance(inputs, (list, tuple)):
-            # if inputs is not a list of groundings (in the case we have only one input for the predicate),
-            # cross_grounding_values is used only to compute doms and dims_0
-            inputs, doms, dims_0 = cross_grounding_values_of_symbols([inputs], flatten_dim0=True)
-            inputs = inputs[0]
-        else:
-            inputs, doms, dims_0 = cross_grounding_values_of_symbols(inputs, flatten_dim0=True)
-        print(inputs.shape)
-        # TODO chiedere a Luciano cosa succede se passo una matrice e vorrei avere il valore del predicato
-        outputs = self.model(inputs, *args, **kwargs)
-        print(outputs)
-        # TODO capire questa cosa
-        print(dims_0)
-        if dims_0:
-            outputs = torch.reshape(outputs, tuple(dims_0)) # qua ho visto che non un transpose ottengo lo stesso risultato
+        assert isinstance(inputs, list), "The inputs parameter should be a list of tensors."
+        inputs, vars, n_individuals_per_var = cross_grounding_values_of_symbols(inputs, flatten_dim0=True)
+        if self.model_type == "linear":
+            # qui devo fare il flat e la concatenazione degli input
+            flat_inputs = [torch.flatten(x, start_dim=1) for x in inputs]
+            inputs = torch.cat(flat_inputs, dim=1) if len(flat_inputs) > 1 else flat_inputs[0]
+        outputs = self.grounding(inputs, *args, **kwargs)
+        if n_individuals_per_var:
+            # se ci sono delle variabili nella espressione di input, l'output diventa un tensore dove gli assi
+            # corrispondono alle variabili
+            outputs = torch.reshape(outputs, tuple(n_individuals_per_var))
 
-        outputs.active_doms = doms
+        # TODO capire bene a cosa serve active doms perche' qui ho un active doms per predicato, invece forse ne serve uno per output
+        self.free_variables = vars
         return outputs
 
-    @classmethod
-    def Lambda(cls, lambda_operator):
-        """Constructor that takes in argument a lambda function. It is appropriate for small
-        non-trainable mathematical operations that return a value in [0,1]."""
-        model = LambdaModel(lambda_operator)
-        return cls(model)
+    def lambda_operation(self, lambda_function):
+        """It construct a simple and non-trainable mathematical operation using the lambda function given in input.
+        It is appropriate for small non-trainable mathematical operations that return a value in [0,1]."""
+        class LambdaModel(nn.Module):
+            def __init__(self, lambda_func):
+                super(LambdaModel, self).__init__()
+                self.lambda_func = lambda_func
 
-    @classmethod
-    def MLP(cls, layer_dims=(16, 16, 1)):
+            def forward(self, x):
+                return self.lambda_func(x)
+
+        model = LambdaModel(lambda_function)
+        return model
+
+    def MLP(self, layer_dims=(16, 16, 1)):
+        """
+        It constructs a fully-connected MLP with the layers given in input.
+        :param layer_dims: dimensions of the layers of the MLP.
+        :return: an MLP with architecture defined by layers_dim parameter.
+        """
         layers = []
         for i in range(1, len(layer_dims)):
             layers.append(nn.Linear(layer_dims[i - 1], layer_dims[i]))
@@ -266,4 +319,4 @@ class Predicate(nn.Module):
             else:
                 layers.append(nn.Sigmoid())
         model = nn.Sequential(*layers)
-        return cls(model)
+        return model

@@ -3,7 +3,6 @@ import torch
 from ltn.core import cross_grounding_values_of_symbols
 
 
-
 class ModelP(torch.nn.Module):
     def __init__(self):
         super(ModelP, self).__init__()
@@ -11,28 +10,33 @@ class ModelP(torch.nn.Module):
         self.elu = torch.nn.ELU()
         self.sigmoid = torch.nn.Sigmoid()
         self.dense2 = torch.nn.Linear(5, 1)  # returns one value in [0,1]
+
     def forward(self, x):
         x = self.elu(self.dense1(x))
         return self.sigmoid(self.dense2(x))
 
 def main():
-    #print(v)
+    d_img = ltn.Domain([2, 2], "d_img")
+    l_img = ltn.Domain([3], "l_img")
 
-    d1 = ltn.Domain((2, 2), "d1")
-    d2 = ltn.Domain((3, 4), "d2")
+    imgs = ltn.Variable('imgs', d_img, [[[3., 4.], [1., 3.]], [[3., 4.], [4., 3.]], [[2., 3.], [4., 9.]], [[3., 4.], [5., 9.]]])
+    labels = ltn.Variable('labels', l_img, [[0., 0., 1.], [0., 1., 0.], [1., 0., 0.], [0., 1., 0.]])
 
-    x = ltn.Variable('x', d1, [[[3., 4.], [2., 6.]], [[9.5, 4.9], [3.4, 5.6]]])
-    y = ltn.Variable('y', d2, [[[3., 4., 4., 3.], [2., 6., 5., 4.], [4., 3., 5., 3.]], [[3., 4., 3., 3.],
-                            [2., 6., 5., 4.], [4., 3., 5., 3.]], [[3., 4., 3., 3.], [2., 6., 5., 4.], [4., 3., 5., 3.]]])
+    P = ltn.Predicate('p', [d_img, l_img], layers_size=(7, 2, 1))
 
-    new_const = ltn.Constant('c', d1, [[3., 4.], [2., 5.]], trainable=True)
+    points = ltn.Domain([2], "points")
+    c = ltn.Constant('point', points, [2.1, 3.])
+    mu = torch.tensor([2., 3.])
 
-    p = ltn.Predicate('p', d1, model)
+    P1 = ltn.Predicate("p1", [points], lambda_func=lambda x: torch.exp(-torch.norm(x - mu, dim=1)))
 
-    print(cross_grounding_values_of_symbols([x, y]))
+    print(P1([c]))
+
+    print(P([imgs, labels]))
+
+    #print(cross_grounding_values_of_symbols([x, y]))
     # print(cross_grounding_values([con], flatten_dim0=True))
     #print(con)
-    modelP = ModelP()
     # P = ltn.Predicate(modelP)
     #print(g)
     #P = ltn.Predicate.MLP([2, 16, 14, 12, 1])
