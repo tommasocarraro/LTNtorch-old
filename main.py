@@ -25,10 +25,13 @@ def main():
     P = ltn.Predicate('p', [d_img, l_img], layers_size=(7, 2, 1))
 
     points = ltn.Domain([2], "points")
+    var_point = ltn.Variable('var_point', points, [[2.1, 3.], [2., 9.]])
     c = ltn.Constant('point', points, [2.1, 3.])
     mu = torch.tensor([2., 3.])
 
     P1 = ltn.Predicate("p1", [points], lambda_func=lambda x: torch.exp(-torch.norm(x - mu, dim=1)))
+
+    print(P1([var_point]))
 
     print(P1([c]))
 
