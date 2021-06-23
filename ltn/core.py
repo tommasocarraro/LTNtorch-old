@@ -78,7 +78,9 @@ class Constant(object):
                + str(self.grounding) + ", grounding_free_variables=" + str(self.grounding.free_variables) + ")"
 
     def get_grounding(self):
-        return self.grounding
+        ret_grounding = copy.deepcopy(self.grounding)
+        ret_grounding.free_variables = self.grounding.free_variables
+        return ret_grounding
 
 
 class Variable(object):
@@ -128,7 +130,9 @@ class Variable(object):
                ", grounding_free_variables=" + str(self.grounding.free_variables) + ")"
 
     def get_grounding(self):
-        return self.grounding
+        ret_grounding = copy.deepcopy(self.grounding)
+        ret_grounding.free_variables = self.grounding.free_variables
+        return ret_grounding
 
 
 def get_n_individuals_of_var(grounding, var):
