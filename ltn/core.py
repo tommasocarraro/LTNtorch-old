@@ -134,7 +134,7 @@ class PropositionalVariable(object):
 
 
 class Variable(object):
-    # TODO capire a cosa serve latent_dom nel codice orginale
+    # TODO descrivere latent_variable una volta capito il significato
     """Variable class for ltn.
 
     An ltn variable denotes a sequence of individuals. It is grounded as a sequence of tensors (groundings of
@@ -173,6 +173,7 @@ class Variable(object):
             raise ValueError("Labels starting with diag are reserved.")
         self.variable_name = variable_name
         self.grounding.free_variables = [variable_name]
+        self.grounding.latent_variable = variable_name
 
     def __repr__(self):
         return "Variable(variable_name='" + self.variable_name + "', domain=" + repr(self.domain) + \
@@ -546,3 +547,159 @@ class Function(nn.Module):
     def __repr__(self):
         return "Function(function_name='" + self.function_name + "', input_domain=" + repr(self.input_domain) + \
                ", output_domain=" + repr(self.output_domain) + ", grounding=" + str(self.grounding) + ")"
+
+
+def diag(*variables):
+    """Sets the given ltn variables for diagonal quantification (no broadcasting between these variables).
+
+    Given 2 (or more) ltn variables, there are scenarios where one wants to express statements about
+    specific pairs (or tuples) only, such that the i-th tuple contains the i-th instances of the variables.
+    We allow this using `ltn.diag`.
+    Note: diagonal quantification assumes that the variables have the same number of individuals.
+    Given a predicate `P(x,y)` with two variables `x` and `y`,
+    the usual broadcasting followed by an aggregation would compute (in Python pseudo-code):
+        ```
+        for i,x_i in enumerate(x):
+            for j,y_j in enumerate(y):
+                results[i,j]=P(x_i,y_i)
+        aggregate(results)
+        ```
+    In contrast, diagonal quantification would compute:
+        ```
+        for i,(x_i, y_i) in enumerate(zip(x,y)):
+            results[i].append(P(x_i,y_i))
+        aggregate(results)
+        ```
+    Ltn computes only the "zipped" results.
+    """
+    diag_dom = "diag_" + "_".join([var.grounding.latent_variable for var in variables])
+    for var in variables:
+        var.grounding.free_variables = [diag_dom]
+    return variables
+
+
+def undiag(*variables):
+    """Resets the usual broadcasting strategy for the given ltn variables.
+
+    In practice, `ltn.diag` is designed to be used with quantifiers.
+    Every quantifier automatically calls `ltn.undiag` after the aggregation is performed,
+    so that the variables keep their normal behavior outside of the formula.
+    Therefore, it is recommended to use `ltn.diag` only in quantified formulas as follows:
+        ```
+        Forall(ltn.diag(x,l), C([x,l]))
+        ```
+    """
+    for var in variables:
+        var.grounding.free_variables = [var.grounding.latent_variable]
+    return variables
+
+
+class WrapperConnective:
+    # TODO scrivere meglio la documentazione
+    """Class to wrap binary connective operators to use them within ltn formulas.
+
+    LTN supports various logical connectives. They are grounded using fuzzy semantics.
+    The implementation of some common fuzzy logic operators using PyTorch primitives is in `ltn.fuzzy_ops`.
+    The wrapper ltn.WrapperConnective allows to use the operators with LTN formulas.
+    It takes care of combining sub-formulas that have different variables appearing in them
+    (the sub-formulas may have different dimensions that need to be "broadcasted").
+    Attributes:
+        _connective_op: the original binary connective operator (without broadcasting).
+    """
+
+    def __init__(self, connective_op):
+        self._connective_op = connective_op
+
+    def __call__(self, *symbol_groundings, **kwargs):
+        # TODO capire a cosa serviva l'eccezione qui
+        symbol_groundings, vars, _ = cross_grounding_values_of_symbols(symbol_groundings)
+        result = self._connective_op(*symbol_groundings, **kwargs)
+        result.free_variables = vars
+        return result
+
+
+class WrapperQuantifier:
+    # TODO scrivere meglio la documentazione
+    # TODO vedere se cambiare symbol_grounding in grounding e basta, perche' la formula non e' un simbolo ma ha comunque un grounding
+    """Class to wrap quantifier operators to use them within ltn formulas.
+
+    LTN supports universal and existential quantification. They are grounded using aggregation operators.
+    The implementation of some common aggregators using PyTorch primitives is in `ltn.fuzzy_ops`.
+    The wrapper allows to use the quantifiers with LTN formulas.
+    It takes care of selecting the tensor dimensions to aggregate, given some variables in arguments.
+    Additionally, boolean conditions (`mask_fn`,`mask_vars`) can be used for guarded quantification.
+    Attributes:
+        _aggreg_op: The original aggregation operator. It is a wrapper for the aggregation operator;
+        quantifier: it is a string indicating the quantification that has to be performed (exists or forall)
+    """
+
+    def __init__(self, aggreg_op, quantifier):
+        self._aggreg_op = aggreg_op
+        if quantifier not in ["forall", "exists"]:
+            raise ValueError("The keyword for the quantifier should be \"forall\" or \"exists\".")
+        self.quantifier = quantifier
+
+    def __call__(self, variables_groundings, symbol_grounding, mask_vars=None, mask_fn=None, **kwargs):
+        # TODO capire se trasformare variables in variables_groundings
+        """
+        mask_fn(mask_vars)
+        """
+        variables_groundings = [variables_groundings] if not isinstance(variables_groundings, list) \
+            else variables_groundings
+        aggreg_vars = set([var.free_variables[0] for var in variables_groundings])
+        if mask_fn is not None and mask_vars is not None:
+            # create and apply the mask
+            symbol_grounding, mask = compute_mask(symbol_grounding, mask_vars, mask_fn, aggreg_vars)
+            masked_symbol_grounding = torch.masked_select(symbol_grounding, mask)
+            # aggregate
+            aggreg_axes = [symbol_grounding.free_variables.index(var) for var in aggreg_vars]
+            result = self._aggreg_op(masked_symbol_grounding, aggreg_axes, **kwargs)
+            # For some values in the tensor, the mask can result in aggregating with empty variables.
+            #    e.g. forall X ( exists Y:condition(X,Y) ( p(X,Y) ) )
+            #       For some values of X, there may be no Y satisfying the condition
+            # The result of the aggregation operator in such case is often not defined (e.g. nan).
+            # We replace the result with 0.0 if the semantics of the aggregator is exists,
+            # or 1.0 if the semantics of the aggregator is forall.
+            aggreg_axes_in_mask = [mask.free_variables.index(var) for var in aggreg_vars
+                                   if var in mask.free_variables]
+            non_empty_vars = torch.sum(mask, dim=aggreg_axes_in_mask) != 0
+            empty_quantifier = 1. if self.quantifier == "forall" else 0
+            result = torch.where(
+                non_empty_vars,
+                result,
+                empty_quantifier
+            )
+        else:
+            aggreg_axes = [symbol_grounding.free_variables.index(var) for var in aggreg_vars]
+            result = self._aggreg_op(symbol_grounding, dim=aggreg_axes, **kwargs)
+        result.free_variables = [var for var in symbol_grounding.free_variables if var not in aggreg_vars]
+        undiag(*variables_groundings)
+        return result
+
+
+def compute_mask(symbol_grounding, mask_vars, mask_fn, aggreg_vars):
+    # 1. cross symbol_grounding with groundings of variables that are in the mask but not yet in the formula
+    mask_vars_not_in_symbol_grounding = [var for var in mask_vars if var.free_variables[0] not in symbol_grounding.free_variables]
+    wff = cross_grounding_values_of_symbols([symbol_grounding] + mask_vars_not_in_symbol_grounding)[0][0]
+    # 2. set the masked vars on the first axes
+    vars_in_mask = [var.free_variables[0] for var in mask_vars]
+    vars_in_mask_not_aggreg = [var for var in vars_in_mask if var not in aggreg_vars]
+    vars_in_mask_aggreg = [var for var in vars_in_mask if var in aggreg_vars]
+    vars_not_in_mask = [var for var in symbol_grounding.free_variables if var not in vars_in_mask]
+    new_vars_order = vars_in_mask_not_aggreg + vars_in_mask_aggreg + vars_not_in_mask
+    symbol_grounding = transpose_doms(symbol_grounding, new_vars_order)
+    # 3. compute the boolean mask from the masked vars
+    crossed_mask_vars, vars_order_in_mask, n_individuals_per_var = cross_grounding_values_of_symbols(mask_vars, flatten_dim0=True)
+    mask = mask_fn(crossed_mask_vars)
+    mask = torch.reshape(mask, tuple(n_individuals_per_var))
+    # 4. shape it according to the var order in wff
+    mask.free_variables = vars_order_in_mask
+    mask = transpose_doms(mask, vars_in_mask_not_aggreg + vars_in_mask_aggreg)
+    return wff, mask
+
+
+def transpose_doms(symbol_grounding, new_vars_order):
+    perm = [symbol_grounding.active_doms.index(dom) for dom in new_vars_order]
+    wff = torch.permute(symbol_grounding, perm)
+    wff.active_doms = new_vars_order
+    return wff

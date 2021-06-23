@@ -1,5 +1,5 @@
 import torch
-
+# TODO commentare tutti gli operatori
 """
 Element-wise fuzzy logic operators for PyTorch.
 Supports traditional NumPy/PyTorch broadcasting.
@@ -10,7 +10,7 @@ wrap the operator with `ltn.WrapperConnective` or `ltn.WrapperQuantifier`.
 
 # these are the projection functions to make the Product Real Logic stable. These functions help to change the input
 # of particular fuzzy operators in such a way they do not lead to gradient problems (vanishing, exploding).
-eps = 1e-4  # epsilon is set to small
+eps = 1e-4  # epsilon is set to small value
 
 
 def pi_0(x):
