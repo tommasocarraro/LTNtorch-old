@@ -77,6 +77,9 @@ class Constant(object):
         return "Constant(constant_name='" + self.constant_name + "', domain=" + repr(self.domain) + ", grounding=" \
                + str(self.grounding) + ", grounding_free_variables=" + str(self.grounding.free_variables) + ")"
 
+    def get_grounding(self):
+        return self.grounding
+
 
 class Variable(object):
     # TODO capire a cosa serve latent_dom nel codice orginale
@@ -124,20 +127,24 @@ class Variable(object):
                ", individuals_number=" + str(self.grounding.shape[0]) + ", grounding=" + str(self.grounding) + \
                ", grounding_free_variables=" + str(self.grounding.free_variables) + ")"
 
+    def get_grounding(self):
+        return self.grounding
 
-def get_n_individuals_of_var(symbol, var):
-    """Returns the number of individuals of the variable var contained in the grounding of the symbol given in input.
+
+def get_n_individuals_of_var(grounding, var):
+    """Returns the number of individuals of the variable var contained in the grounding given in input.
     Here, var is needed to specify the axis of the variable in the grounding (tensor).
     """
-    return symbol.grounding.size(symbol.grounding.free_variables.index(var))
+    return grounding.size(grounding.free_variables.index(var))
 
 
-def cross_grounding_values_of_symbols(symbols, flatten_dim0=False):
+def cross_grounding_values_of_symbols(symbol_groundings, flatten_dim0=False):
     """
-    This function creates the combination of all the possible values of the groundings of the symbols given in input.
-    These symbols can be ltn variables, constants, functions, predicates, or any expression built on those.
+    This function creates the combination of all the possible values of the groundings given in input. These are
+    the groundings of logical symbols or any expression built on them. These symbols can be ltn variables, constants,
+    functions, predicates, or any expression built on those.
 
-    It returns a list of tensors containing the combinations of values of the groundings of the input symbols. Each one
+    It returns a list of tensors containing the combinations of values of the groundings given in input. Each one
     of these tensors is a component of the combination. If these tensors are concatenated along axis 1, the combinations
     are generated. The output list contains one tensor per input symbol.
 
@@ -146,27 +153,23 @@ def cross_grounding_values_of_symbols(symbols, flatten_dim0=False):
     in input.
 
     Args:
-        symbols: list of symbols of potentially different sizes for which the combination of values of the groundings
-        have to be generated. These symbols can be ltn variables, constants, functions, predicates, or any expression
-        built on those.
+        symbol_groundings: list of groundings of symbols of potentially different sizes for which the combination of
+        values have to be generated. These groundings are related to symbols that can be ltn variables, constants,
+        functions, predicates, or any expression built on those.
         flatten_dim0: if True, it removes the first dimension from the output tensors and flat it. For example, if one
         output tensor has size [3, 2, 2], if flatten_dim0 is set to True, its size becomes [6, 2].
     """
-    symbols_c = copy.deepcopy(symbols)
-    print(type(symbols))
-    print(type(symbols_c))
-
     vars_to_n_individuals = {}
-    for symbol in symbols_c:
-        for var in symbol.grounding.free_variables:
-            vars_to_n_individuals[var] = get_n_individuals_of_var(symbol, var)
+    for grounding in symbol_groundings:
+        for var in grounding.free_variables:
+            vars_to_n_individuals[var] = get_n_individuals_of_var(grounding, var)
     vars = list(vars_to_n_individuals.keys())
     n_individuals_per_var = list(vars_to_n_individuals.values())
     crossed_symbol_groundings = []
-    for symbol in symbols_c:
-        vars_in_symbol = list(symbol.grounding.free_variables)
+    for grounding in symbol_groundings:
+        vars_in_symbol = list(grounding.free_variables)
         vars_not_in_symbol = list(set(vars).difference(vars_in_symbol))
-        symbol_grounding = symbol.grounding
+        symbol_grounding = grounding
         for new_var in vars_not_in_symbol:
             new_idx = len(vars_in_symbol)
             symbol_grounding = torch.unsqueeze(symbol_grounding, dim=new_idx)
@@ -176,7 +179,7 @@ def cross_grounding_values_of_symbols(symbols, flatten_dim0=False):
         perm = [vars_in_symbol.index(var) for var in vars] + list(range(len(vars_in_symbol),
                                                                         len(symbol_grounding.shape)))
         symbol_grounding = symbol_grounding.permute(perm)
-        symbol.grounding.free_variables = vars
+        grounding.free_variables = vars
         if flatten_dim0:
             shape_list = [-1] + list(symbol_grounding.shape[len(vars_in_symbol)::])
             symbol_grounding = torch.reshape(symbol_grounding, shape=tuple(shape_list))
@@ -437,7 +440,8 @@ class Function(nn.Module):
             inputs: list of tensors that are ltn terms (ltn variable, ltn constant or
                     output of a ltn functions).
         Returns:
-            outputs: tensor of truth values, with dimensions s.t. each variable corresponds to one axis.
+            outputs: tensor of output values (each output is a tensor too), with dimensions s.t. each variable
+            corresponds to one axis.
         """
         assert isinstance(inputs, list), "The inputs parameter should be a list of tensors."
         inputs, vars, n_individuals_per_var = cross_grounding_values_of_symbols(inputs, flatten_dim0=True)

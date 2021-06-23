@@ -38,11 +38,11 @@ def main():
     f1 = ltn.Function("f1", [d_img, l_img], d_img, layers_size=(7, 4, 2, 4, 2, 4))
     #print(f1)
 
-    print(imgs)
+    print(imgs.grounding.free_variables)
 
-    f1([imgs, labels])
+    f1([imgs.grounding, labels.grounding])
 
-    print(imgs)
+    print(imgs.grounding.free_variables)
 
     #print(P1([var_point]))
 
