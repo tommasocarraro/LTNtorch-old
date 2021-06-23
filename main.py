@@ -46,6 +46,10 @@ def main():
 
     print(P([imgs.get_grounding(), labels.get_grounding()]))
 
+    prop = ltn.PropositionalVariable('prop', [0.4], False)
+
+    print(prop)
+
 
 if __name__ == "__main__":
     main()
