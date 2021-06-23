@@ -358,7 +358,10 @@ class Predicate(nn.Module):
             flat_inputs = [torch.flatten(x, start_dim=1) for x in inputs]
             inputs = torch.cat(flat_inputs, dim=1) if len(flat_inputs) > 1 else flat_inputs[0]
         if self.model_type == 'lambda':
-            inputs = torch.cat(inputs, dim=0)
+            # TODO capire cosa fare con gli input nel caso della lambda come comportarsi, perche' ci sono dei problemi
+            # forse non bisogna fare nessuna trasformazione
+            print("ciao")
+            #inputs = torch.cat(inputs, dim=0)
         outputs = self.grounding(inputs, *args, **kwargs)
         if n_individuals_per_var:
             # se ci sono delle variabili nella espressione di input, l'output diventa un tensore dove gli assi

@@ -1,7 +1,5 @@
 import ltn
 import torch
-from ltn.core import cross_grounding_values_of_symbols
-import copy
 
 
 class ModelP(torch.nn.Module):
