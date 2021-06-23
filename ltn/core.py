@@ -1,14 +1,7 @@
 import torch
 from torch import nn
 import math
-import numpy as np
-
-# TODO definire dominio con shape e sample
-# TODO fare in modo che le costanti, variabili, funzioni e predicati prendano in input i propri domini, in questo
-# TODO modo si riesce ad evitare di tenere taccia delle dimensioni quando si creano le reti neurali
-# TODO il discorso dell'active doms fa casino. Bisogna che sia un campo dinamico come e' stato fatto, se no succede il disastro
-# TODO mettere che il campo free_variables e' collegato al grounding stesso e non alla classe
-
+import copy
 
 class Domain(object):
     """Domain class for ltn.
@@ -65,10 +58,10 @@ class Constant(object):
     Attributes:
         constant_name: see constant_name argument.
         grounding: it is the grounding of the LTN constant. Specifically, it is a torch.tensor with shape depending on
-        the domain of the constant.
+        the domain of the constant. The grounding has a dynamically added attribute called free_variables, which
+        contains a list of strings of the labels of the free variables contained in the expression. In the case of a
+        constant, free_variables is empty since a constant does not contain variables.
         domain: see the domain argument.
-        free_variables: it is a list of string containing the labels of the free variables contained in the expression.
-        In the case of a constant, free_variables is empty since a constant does not contain variables.
     """
     def __init__(self, constant_name, domain, value, trainable=False):
         value = torch.tensor(value, requires_grad=trainable)
@@ -78,15 +71,15 @@ class Constant(object):
         self.constant_name = constant_name
         self.grounding = value
         self.domain = domain
-        self.free_variables = []
+        self.grounding.free_variables = []
 
     def __repr__(self):
         return "Constant(constant_name='" + self.constant_name + "', domain=" + repr(self.domain) + ", grounding=" \
-               + str(self.grounding) + ", free_variables=" + str(self.free_variables) + ")"
+               + str(self.grounding) + ", grounding_free_variables=" + str(self.grounding.free_variables) + ")"
 
 
 class Variable(object):
-    # TODO capire a cosa serve latent_dom
+    # TODO capire a cosa serve latent_dom nel codice orginale
     """Variable class for ltn.
 
     An ltn variable denotes a sequence of individuals. It is grounded as a sequence of tensors (groundings of
@@ -97,14 +90,14 @@ class Variable(object):
     Args:
         variable_name: it is a string containing the name of the variable, for example 'x'.
         domain: it is the domain of the LTN variable.
-        individual_seq: it is a sequence of individuals (sequence of tensors) to ground the ltn variable.
+        individuals_seq: it is a sequence of individuals (sequence of tensors) to ground the ltn variable.
             Alternatively, a tensor to use as is.
     Attributes:
         grounding: it is the grounding of the LTN variable. Specifically, it is a torch.tensor with shape depending on
-        the domain of the variable.
+        the domain of the variable. The grounding has a dynamically added attribute called free_variables, which
+        contains a list of strings of the labels of the free variables contained in the expression. In this case, since
+        we have just a variable, free_variables will contain the variable itself.
         domain: see the domain argument.
-        free_variables: it is a list of string containing the labels of the free variables contained in the expression.
-        In this case, since we have just a variable, free_variables will contain the variable itself.
     """
     def __init__(self, variable_name, domain, individuals_seq):
         if isinstance(individuals_seq, torch.FloatTensor):
@@ -124,19 +117,19 @@ class Variable(object):
         if variable_name.startswith("diag"):
             raise ValueError("Labels starting with diag are reserved.")
         self.variable_name = variable_name
-        self.free_variables = [variable_name]
+        self.grounding.free_variables = [variable_name]
 
     def __repr__(self):
         return "Variable(variable_name='" + self.variable_name + "', domain=" + repr(self.domain) + \
                ", individuals_number=" + str(self.grounding.shape[0]) + ", grounding=" + str(self.grounding) + \
-               ", free_variables=" + str(self.free_variables) + ")"
+               ", grounding_free_variables=" + str(self.grounding.free_variables) + ")"
 
 
 def get_n_individuals_of_var(symbol, var):
     """Returns the number of individuals of the variable var contained in the grounding of the symbol given in input.
     Here, var is needed to specify the axis of the variable in the grounding (tensor).
     """
-    return symbol.grounding.size(symbol.free_variables.index(var))
+    return symbol.grounding.size(symbol.grounding.free_variables.index(var))
 
 
 def cross_grounding_values_of_symbols(symbols, flatten_dim0=False):
@@ -159,15 +152,19 @@ def cross_grounding_values_of_symbols(symbols, flatten_dim0=False):
         flatten_dim0: if True, it removes the first dimension from the output tensors and flat it. For example, if one
         output tensor has size [3, 2, 2], if flatten_dim0 is set to True, its size becomes [6, 2].
     """
+    symbols_c = copy.deepcopy(symbols)
+    print(type(symbols))
+    print(type(symbols_c))
+
     vars_to_n_individuals = {}
-    for symbol in symbols:
-        for var in symbol.free_variables:
+    for symbol in symbols_c:
+        for var in symbol.grounding.free_variables:
             vars_to_n_individuals[var] = get_n_individuals_of_var(symbol, var)
     vars = list(vars_to_n_individuals.keys())
     n_individuals_per_var = list(vars_to_n_individuals.values())
     crossed_symbol_groundings = []
-    for symbol in symbols:
-        vars_in_symbol = list(symbol.free_variables)
+    for symbol in symbols_c:
+        vars_in_symbol = list(symbol.grounding.free_variables)
         vars_not_in_symbol = list(set(vars).difference(vars_in_symbol))
         symbol_grounding = symbol.grounding
         for new_var in vars_not_in_symbol:
@@ -179,7 +176,7 @@ def cross_grounding_values_of_symbols(symbols, flatten_dim0=False):
         perm = [vars_in_symbol.index(var) for var in vars] + list(range(len(vars_in_symbol),
                                                                         len(symbol_grounding.shape)))
         symbol_grounding = symbol_grounding.permute(perm)
-        symbol.free_variables = vars
+        symbol.grounding.free_variables = vars
         if flatten_dim0:
             shape_list = [-1] + list(symbol_grounding.shape[len(vars_in_symbol)::])
             symbol_grounding = torch.reshape(symbol_grounding, shape=tuple(shape_list))
@@ -201,7 +198,6 @@ class LambdaModel(nn.Module):
 
 
 class Predicate(nn.Module):
-    # TODO fare metodo repr per il predicato
     # TODO descrivere bene cosa fa il metodo init e come usa i parametri
     """Predicate class for ltn.
 
@@ -232,9 +228,12 @@ class Predicate(nn.Module):
     Attributes:
         predicate_name: see predicate_name argument;
         input_domain: see input_domain argument;
-        grounding: the grounding of the ltn predicate;
-        model_type: it is a string containing the type of the model (linear, lambda or conv);
-        free_variables: it is a list of string containing the labels of the free variables contained in the expression.
+        grounding: the grounding of the ltn predicate. The grounding of a predicate is a non-trainable model implemented
+        using a lambda function or a learnable model. When the groundings of the inputs are given to the predicate model,
+        the model returns a real value in [0, 1] for each combination of the values of the groundings given in input.
+        Then, at the output is attached a dynamic attribute called free_variables, which contains the list of free
+        variables contained in the output tensor;
+        model_type: it is a string containing the type of the model (linear, lambda or conv).
     """
     # TODO descrivere la lambda sui model type
     def __init__(self, predicate_name, input_domain, model=None, layers_size=None, lambda_func=None):
@@ -279,7 +278,6 @@ class Predicate(nn.Module):
                                  "are missed.")
         '''
         self.grounding = model
-        self.free_variables = []
 
     def forward(self, inputs, *args, **kwargs):
         """Encapsulates the "self.model.forward()" to handle the ltn-broadcasting.
@@ -305,7 +303,7 @@ class Predicate(nn.Module):
             outputs = torch.reshape(outputs, tuple(n_individuals_per_var))
 
         # TODO capire bene a cosa serve active doms perche' qui ho un active doms per predicato, invece forse ne serve uno per output
-        self.free_variables = vars
+        outputs.free_variables = vars
         return outputs
 
     @staticmethod
@@ -332,10 +330,13 @@ class Predicate(nn.Module):
         model = nn.Sequential(*layers)
         return model
 
+    def __repr__(self):
+        return "Predicate(predicate_name='" + self.predicate_name + "', input_domain=" + repr(self.input_domain) + \
+               ", grounding=" + str(self.grounding) + ")"
+
 
 class Function(nn.Module):
-    # TODO fare il metodo repr per la funzione
-    # TODO pensare a estensione in cui una funzione pue' avere piu' di un output
+    # TODO pensare a estensione in cui una funzione puo' avere piu' di un output
     """Function class for LTN.
 
     An ltn function is a mathematical function (pre-defined or learnable) that maps
@@ -367,9 +368,12 @@ class Function(nn.Module):
         function_name: see predicate_name argument;
         input_domain: see input_domain argument;
         output_domain: see output_domain argument;
-        grounding: the grounding of the ltn function;
-        model_type: it is a string containing the type of the model (linear, lambda or conv);
-        free_variables: it is a list of string containing the labels of the free variables contained in the expression.
+        grounding: the grounding of the ltn function. The grounding of a function is a non-trainable model implemented
+        using a lambda function or a learnable model. When the groundings of the inputs are given to the function model,
+        the model returns a tensor in the output domain for each combination of the values of the groundings given in
+        input. Then, at the output is attached a dynamic attribute called free_variables, which contains the list of
+        free variables contained in the output tensor;
+        model_type: it is a string containing the type of the model (linear, lambda or conv).
     """
 
     def __init__(self, function_name, input_domain, output_domain, model=None, layers_size=None, lambda_func=None):
@@ -425,7 +429,6 @@ class Function(nn.Module):
                                  "are missed.")
         '''
         self.grounding = model
-        self.free_variables = []
 
     def forward(self, inputs, *args, **kwargs):
         """Encapsulates the "self.model.forward()" to handle the ltn-broadcasting.
@@ -452,8 +455,7 @@ class Function(nn.Module):
             # corrispondono alle variabili
             outputs = torch.reshape(outputs, tuple(n_individuals_per_var + list(outputs.shape[1::])))
 
-        # TODO capire bene a cosa serve active doms perche' qui ho un active doms per predicato, invece forse ne serve uno per output
-        self.free_variables = vars
+        outputs.free_variables = vars
         return outputs
 
     @staticmethod
@@ -477,3 +479,7 @@ class Function(nn.Module):
                 layers.append(nn.ELU())
         model = nn.Sequential(*layers)
         return model
+
+    def __repr__(self):
+        return "Function(function_name='" + self.function_name + "', input_domain=" + repr(self.input_domain) + \
+               ", output_domain=" + repr(self.output_domain) + ", grounding=" + str(self.grounding) + ")"
