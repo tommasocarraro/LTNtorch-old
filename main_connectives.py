@@ -45,6 +45,23 @@ def main():
 
     print(Eq([x, y]))
 
+    dom_points = ltn.Domain([2], "points")
+    dom_var = ltn.Domain([1], 'dom_var')
+    np.random.seed(120)
+    points = np.random.rand(5, 2)  # 5 values in [0,1]^2
+    x = ltn.Variable('x', dom_points, points)
+    y = ltn.Variable('y', dom_points, points)
+    d = ltn.Variable('d', dom_var, [[.1], [.2], [.3], [.4], [.5], [.6], [.7], [.8], [.9]])
+    print(Eq([x.get_grounding(), y.get_grounding()]).shape)
+
+    eucl_dist = lambda x, y: torch.unsqueeze(torch.norm(x - y, dim=1), dim=1)  # function measuring euclidian distance
+    print(Exists(d.get_grounding(),
+           Forall([x.get_grounding(), y.get_grounding()],
+                  Eq([x.get_grounding(), y.get_grounding()]),
+                  mask_vars=[x.get_grounding(), y.get_grounding(), d.get_grounding()],
+                  mask_fn=lambda args: eucl_dist(args[0], args[1]) < args[2]
+                  )))
+
 
 
 
