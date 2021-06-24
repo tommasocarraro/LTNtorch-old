@@ -24,6 +24,29 @@ def main():
 
     print(Or(Eq([x.get_grounding(), c1.get_grounding()]), Eq([x.get_grounding(), y.get_grounding()])).shape)
 
+    Forall = ltn.WrapperQuantifier(ltn.fuzzy_ops.AggregPMeanError(p=2), quantifier="forall")
+    Exists = ltn.WrapperQuantifier(ltn.fuzzy_ops.AggregPMean(p=5), quantifier="exists")
+
+    print(Forall(x.get_grounding(), Eq([x.get_grounding(), y.get_grounding()])).shape)
+
+    #print(Eq([x.get_grounding(), y.get_grounding()]))
+
+    print(Forall([x.get_grounding(), y.get_grounding()], Eq([x.get_grounding(), y.get_grounding()])))
+
+    print(Exists([x.get_grounding(), y.get_grounding()], Eq([x.get_grounding(), y.get_grounding()])))
+
+    print(Forall(x.get_grounding(), Exists(y.get_grounding(), Eq([x.get_grounding(), y.get_grounding()]))))
+
+    x = ltn.Variable('x', dom, np.random.normal(0., 1., (5, 2)))
+
+    print(Eq([x.get_grounding(), y.get_grounding()]))
+
+    x, y = ltn.diag([x.get_grounding(), y.get_grounding()])
+
+    print(Eq([x, y]))
+
+
+
 
 if __name__ == "__main__":
     main()
