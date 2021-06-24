@@ -188,6 +188,7 @@ class Variable(object):
         # here, a deep copy is needed because if it is not used cross_groundings_values() will modify the object instance
         ret_grounding = copy.deepcopy(self.grounding)
         ret_grounding.free_variables = self.grounding.free_variables
+        ret_grounding.latent_variable = self.variable_name
         return ret_grounding
 
 
@@ -362,7 +363,7 @@ class Predicate(nn.Module):
             # TODO capire se va bene lasciare lista di tensori, in tal caso definire la lambda in maniera corretta
             # forse non bisogna fare nessuna trasformazione
             print("ciao")
-            inputs = torch.cat(inputs, dim=0)
+            #inputs = torch.cat(inputs, dim=0)
         outputs = self.grounding(inputs, *args, **kwargs)
         if n_individuals_per_var:
             # se ci sono delle variabili nella espressione di input, l'output diventa un tensore dove gli assi
@@ -614,16 +615,17 @@ class WrapperConnective:
     It takes care of combining sub-formulas that have different variables appearing in them
     (the sub-formulas may have different dimensions that need to be "broadcasted").
     Attributes:
-        _connective_op: the original binary connective operator (without broadcasting).
+        connective_operator: the original binary connective operator (without broadcasting).
     """
 
-    def __init__(self, connective_op):
-        self._connective_op = connective_op
+    def __init__(self, connective_operator):
+        self.connective_operator = connective_operator
 
     def __call__(self, *symbol_groundings, **kwargs):
         # TODO capire a cosa serviva l'eccezione qui
+        # TODO cambiare symbol_groundings in groundings perche' sono groundings
         symbol_groundings, vars, _ = cross_grounding_values_of_symbols(symbol_groundings)
-        result = self._connective_op(*symbol_groundings, **kwargs)
+        result = self.connective_operator(*symbol_groundings)
         result.free_variables = vars
         return result
 
