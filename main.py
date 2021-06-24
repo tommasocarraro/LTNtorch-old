@@ -48,6 +48,14 @@ def main():
 
     print(prop)
 
+    vars = ltn.diag([imgs, labels])
+
+    print(vars)
+
+    vars = ltn.undiag(vars)
+
+    print(vars)
+
 
 if __name__ == "__main__":
     main()

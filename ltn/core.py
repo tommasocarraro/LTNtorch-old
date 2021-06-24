@@ -359,9 +359,10 @@ class Predicate(nn.Module):
             inputs = torch.cat(flat_inputs, dim=1) if len(flat_inputs) > 1 else flat_inputs[0]
         if self.model_type == 'lambda':
             # TODO capire cosa fare con gli input nel caso della lambda come comportarsi, perche' ci sono dei problemi
+            # TODO capire se va bene lasciare lista di tensori, in tal caso definire la lambda in maniera corretta
             # forse non bisogna fare nessuna trasformazione
             print("ciao")
-            #inputs = torch.cat(inputs, dim=0)
+            inputs = torch.cat(inputs, dim=0)
         outputs = self.grounding(inputs, *args, **kwargs)
         if n_individuals_per_var:
             # se ci sono delle variabili nella espressione di input, l'output diventa un tensore dove gli assi
@@ -552,7 +553,8 @@ class Function(nn.Module):
                ", output_domain=" + repr(self.output_domain) + ", grounding=" + str(self.grounding) + ")"
 
 
-def diag(*variables):
+def diag(variables):
+    # TODO descrivere bene cosa fanno questi metodi, con tanto di input e output
     """Sets the given ltn variables for diagonal quantification (no broadcasting between these variables).
 
     Given 2 (or more) ltn variables, there are scenarios where one wants to express statements about
@@ -575,13 +577,18 @@ def diag(*variables):
         ```
     Ltn computes only the "zipped" results.
     """
-    diag_dom = "diag_" + "_".join([var.grounding.latent_variable for var in variables])
+    # check if variables have the same number of individuals
+    n_individuals = [var.grounding.shape[0] for var in variables]
+    assert len(set(n_individuals)) == 1, "The given variables have a different number of individuals between each other." \
+                                         " It is not possible to perform diagonal quantification between variables that" \
+                                         " have a different number of individuals."
+    diag_vars = "diag_" + "_".join([var.grounding.latent_variable for var in variables])
     for var in variables:
-        var.grounding.free_variables = [diag_dom]
+        var.grounding.free_variables = [diag_vars]
     return variables
 
 
-def undiag(*variables):
+def undiag(variables):
     """Resets the usual broadcasting strategy for the given ltn variables.
 
     In practice, `ltn.diag` is designed to be used with quantifiers.
