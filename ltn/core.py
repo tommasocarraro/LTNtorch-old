@@ -323,17 +323,19 @@ class Predicate(nn.Module):
         assert isinstance(input_domain, list), "The input_domain should be a list of domains."
         self.predicate_name = predicate_name
         self.input_domain = input_domain
-        if isinstance(model, (nn.Sequential, nn.Module)) and self.model_type == "linear":
+        if isinstance(model, (nn.Sequential, nn.Module)) and lambda_func is None:
             model_layers = [layer for layer in model.modules()]
             first_layer = model_layers[1]  # in position 0 there is the copy of the model
             if isinstance(first_layer, nn.Linear):
                 self.model_type = "linear"
                 first_layer_size = first_layer.in_features
                 flat_input_domain_size = sum([math.prod(list(domain.shape)) for domain in input_domain])
-                if first_layer_size != flat_input_domain_size:
+                # TODO vedere se rimettere questo controllo, bisogna gestire i differenti input e discrepanze tra i modelli
+                # TODO vedere come hanno fatto loro
+                '''if first_layer_size != flat_input_domain_size:
                     raise ValueError("The input layer size of the given model does not match the size of the input domain. "
                                      "The size of the input layer must match the size of the input domain (sum of sizes"
-                                     " of input domains flattened).")
+                                     " of input domains flattened).")'''
 
         # TODO fare meglio questa parte della convolution perche' e' complicata, per ora i controlli sulle conv non
         # sono implementati
@@ -675,23 +677,21 @@ class WrapperQuantifier:
             symbol_grounding, mask = compute_mask(symbol_grounding, mask_vars, mask_fn, aggregation_vars)
             # we apply the mask to the grounding of the predicate or term (forse solo predicato)
             # vedere se fare il prodotto element-wise qui
-            #masked_symbol_grounding = torch.masked_select(symbol_grounding, mask)  # ritorna una sequenza dei valori del
+            # masked_symbol_grounding = torch.masked_select(symbol_grounding, mask)  # ritorna una sequenza dei valori del
             # predicato che soddisfanno la maschera
             # aggregate
             # dimensione della variabile su cui aggregare
-            masked_symbol_grounding = torch.multiply(symbol_grounding, mask)
-            print(masked_symbol_grounding)
+            # masked_symbol_grounding = torch.multiply(symbol_grounding, mask)
             # metto dei NaN dove la maschera mette zero, il resto lascio invariato
+            # la maschera mette NaN dove il valore del predicato deve essere oscurato, e lascia inalterati gli altri valori
             masked_symbol_grounding = torch.where(
                 ~mask,
                 np.nan,
-                masked_symbol_grounding
+                symbol_grounding
             )
-            print(masked_symbol_grounding)
             # TODO verificare che dove e' nan mi venga fatta l'aggregazione lo stesso
             aggregation_dims = [symbol_grounding.free_variables.index(var) for var in aggregation_vars]
             result = self.aggregation_operator(masked_symbol_grounding, aggregation_dims, **kwargs)
-            print(result)
             # For some values in the tensor, the mask can result in aggregating with empty variables.
             #    e.g. forall X ( exists Y:condition(X,Y) ( p(X,Y) ) )
             #       For some values of X, there may be no Y satisfying the condition
@@ -709,7 +709,7 @@ class WrapperQuantifier:
             # fare aggregazione e l'operatore aggrega sugli assi di queste variabili
             aggregation_dims = [symbol_grounding.free_variables.index(var) for var in aggregation_vars]
             # queste sono le dimensioni su cui la media deve essere fatta
-            result = self.aggregation_operator(symbol_grounding, dim=tuple(aggregation_dims))
+            result = self.aggregation_operator(symbol_grounding, dim=tuple(aggregation_dims), **kwargs)
         result.free_variables = [var for var in symbol_grounding.free_variables if var not in aggregation_vars]
         undiag(variables_groundings)
         return result

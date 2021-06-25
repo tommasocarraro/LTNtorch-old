@@ -137,7 +137,9 @@ class AggregMax:
 
 class AggregMean:
     def __call__(self, xs, dim=None, keepdim=False):
-        return torch.mean(xs, dim=dim, keepdim=keepdim)
+        numerator = torch.nansum(xs, dim=dim, keepdim=keepdim)
+        denominator = torch.sum(~torch.isnan(xs), dim=dim, keepdim=keepdim)
+        return torch.div(numerator / denominator)
 
 
 class AggregPMean:
@@ -150,7 +152,10 @@ class AggregPMean:
         stable = self.stable if stable is None else stable
         if stable:
             xs = pi_0(xs)
-        return torch.pow(torch.mean(torch.pow(xs, p), dim=dim, keepdim=keepdim), 1/p)
+        xs = torch.pow(xs, p)
+        numerator = torch.nansum(xs, dim=dim, keepdim=keepdim)
+        denominator = torch.sum(~torch.isnan(xs), dim=dim, keepdim=keepdim)
+        return torch.pow(torch.div(numerator, denominator), 1 / p)
 
 
 class AggregPMeanError:
@@ -163,4 +168,7 @@ class AggregPMeanError:
         stable = self.stable if stable is None else stable
         if stable:
             xs = pi_0(xs)
-        return 1. - torch.pow(torch.mean(torch.pow(1. - xs, p), dim=dim, keepdim=keepdim), 1/p)
+        xs = torch.pow(1. - xs, p)
+        numerator = torch.nansum(xs, dim=dim, keepdim=keepdim)
+        denominator = torch.sum(~torch.isnan(xs), dim=dim, keepdim=keepdim)
+        return 1. - torch.pow(torch.div(numerator, denominator), 1 / p)
