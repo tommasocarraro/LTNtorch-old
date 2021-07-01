@@ -295,7 +295,7 @@ class Predicate(nn.Module):
         It constructs a fully-connected MLP with linear layers with the dimensions given in input. It uses an ELU
         activation on the hidden layers and a sigmoid on the final layer.
         :param layer_dims: dimensions of the layers of the MLP.
-        :return: an MLP with architecture defined by `layers_dim` parameter. The first dimension is the dimension of
+        :return: an MLP with architecture defined by `layers_dims` parameter. The first dimension is the dimension of
         the input layer, the last dimension is the dimension of the output layer.
         """
         layers = []
@@ -330,104 +330,79 @@ class Function(nn.Module):
     the function (using the name of the variable).
 
     Args:
-        function_name: string containing the name of the function;
-        input_domain: list of domains of the inputs of the function;
-        output_domain: domain of the output of the function;
-        model: model that becomes the grounding of the predicate;
-        layers_size: if a model is not given, it is possible to give layers_size and an MLP with that layers will be
-        used as model;
+        model: PyTorch model that becomes the grounding of the function;
+        layers_size: if a model is not given, it is possible to give `layers_size` and a fully-connected MLP with
+        layers with dimensions specified by `layers_size` will be used as model;
         lambda_func: if a model is not given and layers_size is not given, it is possible to give a lambda function.
-        In this case the lambda function will be used to define a non-trainable model for the ltn function.
+        In this case the lambda function will be used to define a non-trainable model for the LTN function.
     Attributes:
-        function_name: see predicate_name argument;
-        input_domain: see input_domain argument;
-        output_domain: see output_domain argument;
-        grounding: the grounding of the ltn function. The grounding of a function is a non-trainable model implemented
+        model: the grounding of the LTN function. The grounding of a function is a non-trainable model implemented
         using a lambda function or a learnable model. When the groundings of the inputs are given to the function model,
-        the model returns a tensor in the output domain for each combination of the values of the groundings given in
-        input. Then, at the output is attached a dynamic attribute called free_variables, which contains the list of
-        free variables contained in the output tensor;
-        model_type: it is a string containing the type of the model (linear, lambda or conv).
+        the model returns a tensor in the real filed for each combination of the values of the groundings given in input.
+        Then, at the output is attached a dynamic attribute called `free_variables`, which contains the list of free
+        variables contained in the output tensor;
+        model_type: it is a string containing the type of the model (model, lambda). This attribute is used to manage
+        a PyTorch model differently from a lambda model.
     """
 
-    def __init__(self, function_name, input_domain, output_domain, model=None, layers_size=None, lambda_func=None):
-        """Initializes the ltn function with the given nn.Module instance,
-        wrapping it with the ltn-broadcasting mechanism."""
+    def __init__(self, model=None, layers_size=None, lambda_func=None):
+        """
+        Initializes the LTN predicate in three different ways:
+            1. if `model` is not None, it initializes the predicate with the given PyTorch model;
+            2. if `model` is None and `layers_size` is not None, it creates a MLP model with linear layers with
+            dimensions specified by `layers_size` and uses that model as the LTN predicate;
+            3. if `model` is None and `layers_size` is None, it uses the `lambda_func` as a lambda function to represent
+            the LTN predicate. Note that in this case the LTN predicate is not learnable. So, the lambda function has
+            to be used only for simple predicates.
+        Note that if more than one of these parameters is not None, the first parameter that is not None in the order is
+        preferred.
+        """
         super(Function, self).__init__()
         if model is None and layers_size is None and lambda_func is None:
-            raise ValueError("A model, or dimension of layers for constructing a model, or a lambda function to be used"
-                             " as a non-trainable model should be given in input.")
-        if model is not None and (layers_size is not None or lambda_func is not None):
-            raise ValueError("A model has been given, so layers_size and lambda_func can't be given.")
-        if model is None and layers_size is not None and lambda_func is not None:
-            raise ValueError("Only one of layers_size and lambda_func can be given.")
-        if model is None and layers_size is not None:
-            model = self.MLP(layers_size)
-            self.model_type = "linear"
-        if model is None and lambda_func is not None:
-            model = self.lambda_operation(lambda_func)
-            self.model_type = "lambda"
-        assert isinstance(input_domain, list), "The input_domain should be a list of domains."
-        self.function_name = function_name
-        self.input_domain = input_domain
-        self.output_domain = output_domain
-        if isinstance(model, (nn.Sequential, nn.Module)) and self.model_type == "linear":
-            model_layers = [layer for layer in model.modules()]
-            first_layer = model_layers[1]  # in position 0 there is the copy of the model
-            last_layer = model_layers[-1]
-            if isinstance(first_layer, nn.Linear):
-                self.model_type = "linear"
-                first_layer_size = first_layer.in_features
-                flat_input_domain_size = sum([math.prod(list(domain.shape)) for domain in input_domain])
-                if first_layer_size != flat_input_domain_size:
-                    raise ValueError(
-                        "The input layer size of the given model does not match the size of the input domain. "
-                        "The size of the input layer must match the size of the input domain (sum of sizes"
-                        " of input domains flattened).")
-            last_layer_size = last_layer.out_features
-            flat_output_domain_size = math.prod(list(output_domain.shape))
-            if last_layer_size != flat_output_domain_size:
-                raise ValueError(
-                    "The output layer size of the given model does not match the size of the output domain. "
-                    "The size of the output layer must match the size of the output domain (sum of sizes"
-                    " of output domains flattened)."
-                )
+            raise ValueError("A model, or dimension of layers for constructing an MLP model, or a lambda function to "
+                             "be used as a non-trainable model should be given in input.")
+        if model is not None:
+            assert isinstance(model, (nn.Sequential, nn.Module)), "The given model is not a PyTorch model."
+            self.model = model
+            self.model_type = 'model'  # attribute needed to differentiate between PyTorch learnable models and lambdas
+        elif layers_size is not None:
+            assert isinstance(layers_size, tuple), "layers_size must be a tuple of integers."
+            self.model = self.mlp(layers_size)
+            self.model_type = 'model'
+        else:
+            self.model = self.lambda_operation(lambda_func)
+            self.model_type = 'lambda'
 
-        # TODO fare meglio questa parte della convolution perche' e' complicata, per ora i controlli sulle conv non
-        # sono implementati
-        '''
-        if isinstance(first_layer, (torch.nn.Conv1d, torch.nn.Conv2d, torch.nn.Conv3d)):
-            if len(input_domain.shape) != 3:
-                raise ValueError("The given model is a CNN model, but the input domain does not correspond to an image."
-                                 " An image should have three dimensions (width, height, depth). One or more dimensions "
-                                 "are missed.")
-        '''
-        self.grounding = model
-
-    def forward(self, inputs, *args, **kwargs):
+    def forward(self, inputs, output_dim, *args, **kwargs):
         """Encapsulates the "self.model.forward()" to handle the ltn-broadcasting.
 
         Args:
             inputs: list of tensors that are ltn terms (ltn variable, ltn constant or
-                    output of a ltn functions).
+                    output of a ltn function) for which the predicate has to be computed.
+            output_dim: tuple of integers or integer representing the size of the final output. For example, if we need
+            that our function returns a tensor in the domain R^(2x2), the output_dim should be (2, 2).
         Returns:
-            outputs: tensor of output values (each output is a tensor too), with dimensions s.t. each variable
+            a `torch.Tensor` of output values (each output is a tensor too), with dimensions s.t. each variable
             corresponds to one axis.
         """
         assert isinstance(inputs, list), "The inputs parameter should be a list of tensors."
+        assert isinstance(output_dim, (tuple, int)), "The size of the output should be a tuple of integers or" \
+                                                     " an integer value"
         inputs, vars, n_individuals_per_var = cross_grounding_values_of_symbols(inputs, flatten_dim0=True)
-        if self.model_type == "linear":
+        if self.model_type == 'model':
             # qui devo fare il flat e la concatenazione degli input
             flat_inputs = [torch.flatten(x, start_dim=1) for x in inputs]
             inputs = torch.cat(flat_inputs, dim=1) if len(flat_inputs) > 1 else flat_inputs[0]
         if self.model_type == 'lambda':
             inputs = torch.cat(inputs, dim=0)
-        outputs = self.grounding(inputs, *args, **kwargs)
+        outputs = self.model(inputs, *args, **kwargs)
         # qui mi escono gli output flat, ora devo fare una reshape
-        outputs = torch.reshape(outputs, [outputs.shape[0]] + self.output_domain.shape)
+        output_dim = list(output_dim) if isinstance(output_dim, tuple) else [output_dim]
+        outputs = torch.reshape(outputs, [outputs.shape[0]] + output_dim)
         if n_individuals_per_var:
-            # se ci sono delle variabili nella espressione di input, l'output diventa un tensore dove gli assi
-            # corrispondono alle variabili
+            # if the function has inputs containing variables, the output is reshaped according to the dimensions of
+            # these variables, in such a way that the first n axes of the output tensor are associated with the n
+            # variables that appear in the inputs of the predicate
             outputs = torch.reshape(outputs, tuple(n_individuals_per_var + list(outputs.shape[1::])))
 
         outputs.free_variables = vars
@@ -436,16 +411,18 @@ class Function(nn.Module):
     @staticmethod
     def lambda_operation(lambda_function):
         """It construct a simple and non-trainable mathematical operation using the lambda function given in input.
-        It is appropriate for small non-trainable mathematical operations that return a value in [0,1]."""
+        It is appropriate for small non-trainable mathematical operations."""
         model = LambdaModel(lambda_function)
         return model
 
     @staticmethod
-    def MLP(layer_dims=(16, 16, 1)):
+    def mlp(layer_dims=(16, 16, 1)):
         """
-        It constructs a fully-connected MLP with the layers given in input.
+        It constructs a fully-connected MLP with linear layers with the dimensions given in input. It uses an ELU
+        activation on the hidden layers and a linear activation on the final layer.
         :param layer_dims: dimensions of the layers of the MLP.
-        :return: an MLP with architecture defined by layers_dim parameter.
+        :return: an MLP with architecture defined by `layers_dims` parameter. The first dimension is the dimension of
+        the input layer, the last dimension is the dimension of the output layer.
         """
         layers = []
         for i in range(1, len(layer_dims)):
@@ -454,10 +431,6 @@ class Function(nn.Module):
                 layers.append(nn.ELU())
         model = nn.Sequential(*layers)
         return model
-
-    def __repr__(self):
-        return "Function(function_name='" + self.function_name + "', input_domain=" + repr(self.input_domain) + \
-               ", output_domain=" + repr(self.output_domain) + ", grounding=" + str(self.grounding) + ")"
 
 
 def diag(variables_groundings):
