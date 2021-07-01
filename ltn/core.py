@@ -6,89 +6,67 @@ import numpy as np
 
 # TODO ricordarsi di mettere il seed per le cose random
 
-class Domain(object):
-    """Domain class for ltn.
 
-    An ltn domain defines the type of a constant, variable, function, or predicate. Intuitively, a domain could define
-    the possible values that a constant or variable can assume, the possible values that a function can take as input and
-    produce as output, and the possible values that a predicate can take as input.
-
-    Args:
-        shape: it is the shape of the domain. It must be a tuple of integers. For example, shape (3,4,2) defines the
-        domain of tensors of dimension (3,4,2). Notice that the shape defined the grounding of the domain. In
-        fact, a domain symbol is grounded as a set of tensor of size shape.
-        domain_name: it is a string containing the name of the domain, for example, 'people'.
-    Attributes:
-        shape: see shape argument.
-        domain_name: see domain_name argument.
-    """
-    def __init__(self, shape, domain_name):
-        if not isinstance(shape, list) and all(isinstance(v, int) for v in shape):
-            raise ValueError("The shape attribute must be a list of integers.")
-        self.shape = shape
-        self.domain_name = domain_name
-
-    def __repr__(self):
-        return "Domain(domain_name='" + self.domain_name + "', grounding=R^" + str(self.shape) + ")"
-
-    # TODO sample method to sample from the domain with a given distribution
-    '''
-    def sample(self, distribution, n=100):
-        """
-        It samples n samples from the distribution given in input
-        Args:
-            distribution: the distribution from which the samples have to be sampled
-            n: the number of samples to be sampled from the distribution
-        """
-    '''
-
-
-class Constant(object):
+def constant(value, trainable=False):
     # TODO capire se aggiungere la batch dimension anche per la costante
-    """Constant class for ltn.
+    """Function that creates an LTN constant.
 
-    An ltn constant denotes an individual grounded as a tensor in the Real field.
+    An LTN constant denotes an individual grounded as a tensor in the Real field.
     The individual can be pre-defined (fixed data point) or learnable (embedding).
 
     Args:
-        constant_name: string containing the name of the constant.
-        domain: it is the domain of the LTN constant.
-        value: the value that becomes the grounding of the LTN constant. The value becomes the grounding of the
-        individual represented by the constant.
-        trainable: whether the LTN constant is trainable or not. If False, the subgraph containing the constant
-        will be excluded from the gradient computation. Defaults to False. If True, the constant is initialized using the
-        value parameter.
-    Attributes:
-        constant_name: see constant_name argument.
-        grounding: it is the grounding of the LTN constant. Specifically, it is a torch.tensor with shape depending on
-        the domain of the constant. The grounding has a dynamically added attribute called free_variables, which
-        contains a list of strings of the labels of the free variables contained in the expression. In the case of a
-        constant, free_variables is empty since a constant does not contain variables.
-        domain: see the domain argument.
+        value: the value that becomes the grounding of the individual represented by the LTN constant. The value can be
+        a tensor of any order.
+        trainable: whether the LTN constant is trainable or not. If False, the PyTorch subgraph containing the constant
+        will be excluded from the gradient computation. If True, the constant is initialized using the value parameter.
+        Defaults to False.
+    Returns:
+        a `torch.FloatTensor` representing the LTN constant.
+        A dynamic attribute `free_variables` is added to the tensor. In LTN, this attribute contains the labels of the
+        free variables that appear on a constant, variable, formula, etc. `free_variables` is usually a list of labels
+        that associates each variable to one of the axes of the grounding of a formula. Since in this case we have a
+        constant, `free_variables` will be empty since a constant does not have free variables.
     """
-    def __init__(self, constant_name, domain, value, trainable=False):
-        value = torch.tensor(value, requires_grad=trainable)
-        if value.shape != torch.Size(domain.shape):
-            raise ValueError("The value given for the constant does not match the constant's domain. The shape of the "
-                             "value must match the shape of the constant's domain.")
-        self.constant_name = constant_name
-        self.grounding = value
-        self.domain = domain
-        self.grounding.free_variables = []
+    const = torch.tensor(value, requires_grad=trainable)
+    const.free_variables = []
+    return const
 
-    def __repr__(self):
-        return "Constant(constant_name='" + self.constant_name + "', domain=" + repr(self.domain) + ", grounding=" \
-               + str(self.grounding) + ", grounding_free_variables=" + str(self.grounding.free_variables) + ")"
 
-    def get_grounding(self):
-        """
-        This function returns a deep copy of the grounding of the LTN constant.
-        :return: deep copy of the LTN constant grounding.
-        """
-        # here, a deep copy is needed because if it is not used cross_groundings_values() will modify the object instance
-        ret_grounding = copy.deepcopy(self.grounding)
-        ret_grounding.free_variables = self.grounding.free_variables
-        return ret_grounding
+def variable(variable_name, individuals_seq):
+    # TODO descrivere latent_variable una volta capito il significato
+    """Function that creates an LTN variable.
+
+    An LTN variable denotes a sequence of individuals. It is grounded as a sequence of tensors (groundings of
+    individuals) in the real field.
+    Axis 0 is the batch dimension (it is associated with the number of individuals in the grounding of the variable).
+    So, if `x` is an `ltn.Variable`, `x[0]` gives the first individual, `x[1]` gives the second individual,
+    and so forth, i.e., the usual way.
+
+    Args:
+        variable_name: it is a string containing the name of the variable, for example 'x'.
+        individuals_seq: it is a list of individuals that becomes the grounding the LTN variable. Notice that each
+        individual in the sequence must have the same shape (i.e., must be of the same domain). Alternatively, it is
+        possible to directly give a `torch.tensor`, which becomes the grounding of the variable.
+    Returns:
+        a `torch.FloatTensor` representing the LTN variable, where axis 0 is related with the number of individuals in
+        the grounding of the variable. Like for the LTN constants, the dynamic attribute `free_variables` is added to
+        the LTN variable.
+    """
+    if isinstance(individuals_seq, torch.FloatTensor):
+        var = individuals_seq
+    else:
+        var = torch.tensor(individuals_seq)
+
+    if len(var.shape) == 1:
+        # add a dimension if there is only one individual in the sequence, since axis 0 represents the batch dimension
+        var = var.view(1, var.shape[0])
+
+    if variable_name.startswith("diag"):
+        raise ValueError("Labels starting with diag are reserved.")
+    var.free_variables = [variable_name]
+    var.latent_variable = variable_name
+
+    return var
 
 
 class PropositionalVariable(object):
@@ -136,68 +114,9 @@ class PropositionalVariable(object):
         return ret_grounding
 
 
-class Variable(object):
-    # TODO descrivere latent_variable una volta capito il significato
-    """Variable class for ltn.
-
-    An ltn variable denotes a sequence of individuals. It is grounded as a sequence of tensors (groundings of
-    individuals) in the real field.
-    Axis 0 is the batch dimension: if `x` is an `ltn.Variable`, `x[0]` gives the first individual,
-    `x[1]` gives the second individual, and so forth, i.e., the usual way.
-
-    Args:
-        variable_name: it is a string containing the name of the variable, for example 'x'.
-        domain: it is the domain of the LTN variable.
-        individuals_seq: it is a sequence of individuals (sequence of tensors) to ground the ltn variable.
-            Alternatively, a tensor to use as is.
-    Attributes:
-        grounding: it is the grounding of the LTN variable. Specifically, it is a torch.tensor with shape depending on
-        the domain of the variable. The grounding has a dynamically added attribute called free_variables, which
-        contains a list of strings of the labels of the free variables contained in the expression. In this case, since
-        we have just a variable, free_variables will contain the variable itself.
-        domain: see the domain argument.
-    """
-    def __init__(self, variable_name, domain, individuals_seq):
-        if isinstance(individuals_seq, torch.FloatTensor):
-            grounding = individuals_seq
-        else:
-            grounding = torch.tensor(individuals_seq)
-        if grounding[0].shape != torch.Size(domain.shape):
-            raise ValueError("The shape of the given individuals does not match the shape of the variable's domain. "
-                             " The shape of the individuals must match the shape of the variable's domain.")
-
-        if len(grounding.shape) == 1:
-            # add a dimension if there is only one individual in the sequence, since axis 0 represents the batch dimension
-            grounding = grounding.view(1, grounding.shape[0])
-
-        self.grounding = grounding
-        self.domain = domain
-        if variable_name.startswith("diag"):
-            raise ValueError("Labels starting with diag are reserved.")
-        self.variable_name = variable_name
-        self.grounding.free_variables = [variable_name]
-        self.grounding.latent_variable = variable_name
-
-    def __repr__(self):
-        return "Variable(variable_name='" + self.variable_name + "', domain=" + repr(self.domain) + \
-               ", individuals_number=" + str(self.grounding.shape[0]) + ", grounding=" + str(self.grounding) + \
-               ", grounding_free_variables=" + str(self.grounding.free_variables) + ")"
-
-    def get_grounding(self):
-        """
-        This function returns a deep copy of the grounding of the LTN variable.
-        :return: deep copy of the LTN variable grounding.
-        """
-        # here, a deep copy is needed because if it is not used cross_groundings_values() will modify the object instance
-        ret_grounding = copy.deepcopy(self.grounding)
-        ret_grounding.free_variables = self.grounding.free_variables
-        ret_grounding.latent_variable = self.variable_name
-        return ret_grounding
-
-
 def get_n_individuals_of_var(grounding, var):
     """Returns the number of individuals of the variable var contained in the grounding given in input.
-    Here, var is needed to specify the axis of the variable in the grounding (tensor).
+    Here, var is needed to specify the axis of the variable in the input grounding (tensor).
     """
     return grounding.size(grounding.free_variables.index(var))
 
@@ -212,16 +131,18 @@ def cross_grounding_values_of_symbols(symbol_groundings, flatten_dim0=False):
     of these tensors is a component of the combination. If these tensors are concatenated along axis 1, the combinations
     are generated. The output list contains one tensor per input symbol.
 
-    Moreover, it returns a list of variable labels and a list containing the number of individuals for each variable.
+    Moreover, it returns a list of variable labels and a list containing the number of individuals for each variable in
+    the list of variable labels.
     The variable labels correspond to the variables contained in the groundings of the symbols that have been passed
     in input.
 
     Args:
-        symbol_groundings: list of groundings of symbols of potentially different sizes for which the combination of
+        symbol_groundings: list of groundings of symbols of potentially different domains for which the combination of
         values have to be generated. These groundings are related to symbols that can be ltn variables, constants,
         functions, predicates, or any expression built on those.
         flatten_dim0: if True, it removes the first dimension from the output tensors and flat it. For example, if one
-        output tensor has size [3, 2, 2], if flatten_dim0 is set to True, its size becomes [6, 2].
+        output tensor has size [3, 2, 2], if flatten_dim0 is set to True, its size becomes [6, 2]. In other words, it
+        removes the batch dimensions.
     """
     vars_to_n_individuals = {}
     for grounding in symbol_groundings:
@@ -265,117 +186,99 @@ class LambdaModel(nn.Module):
 
 
 class Predicate(nn.Module):
-    # TODO descrivere bene cosa fa il metodo init e come usa i parametri
-    """Predicate class for ltn.
+    """Predicate class for LTN.
 
-    An ltn predicate is a mathematical function (either pre-defined or learnable) that maps
+    An LTN predicate is a mathematical function (either pre-defined or learnable) that maps
     from some n-ary domain of individuals to a real number in [0,1] (fuzzy) that can be interpreted as a truth value.
     Examples of predicates can be similarity measures, classifiers, etc.
 
     Predicates can be defined using any operations in PyTorch. They can be linear functions, Deep Neural Networks,
     and so forth.
 
-    An ltn predicate implements a `nn.Module` instance that can "broadcast" ltn terms as follows:
+    An LTN predicate implements a `nn.Module` instance that can "broadcast" ltn terms as follows:
     1. Evaluating a predicate with one variable of n individuals yields n output values,
     where the i-th output value corresponds to the predicate calculated with the i-th individual.
     2. Evaluating a predicate with k variables (x1,...,xk) with respectively n1,...,nk
     individuals each, yields a result with n1*...*nk values. The result is organized in a tensor
     where the first k dimensions can be indexed to retrieve the outcome(s) that correspond to each variable.
-    The attribute free_variables tells which axis corresponds to which variable in the tensor output by
+    The attribute `free_variables` tells which axis corresponds to which variable in the tensor output by
     the predicate (using the name of the variable).
 
     Args:
-        predicate_name: string containing the name of the predicate;
-        input_domain: list of domains of the inputs of the predicate;
-        model: model that becomes the grounding of the predicate;
-        layers_size: if a model is not given, it is possible to give layers_size and an MLP with that layers will be
-        used as model;
+        model: PyTorch model that becomes the grounding of the predicate;
+        layers_size: if a model is not given, it is possible to give `layers_size` and a fully-connected MLP with
+        layers with dimensions specified by `layers_size` will be used as model;
         lambda_func: if a model is not given and layers_size is not given, it is possible to give a lambda function.
-        In this case the lambda function will be used to define a non-trainable model for the ltn predicate.
+        In this case the lambda function will be used to define a non-trainable model for the LTN predicate.
     Attributes:
-        predicate_name: see predicate_name argument;
-        input_domain: see input_domain argument;
-        grounding: the grounding of the ltn predicate. The grounding of a predicate is a non-trainable model implemented
+        model: the grounding of the LTN predicate. The grounding of a predicate is a non-trainable model implemented
         using a lambda function or a learnable model. When the groundings of the inputs are given to the predicate model,
         the model returns a real value in [0, 1] for each combination of the values of the groundings given in input.
-        Then, at the output is attached a dynamic attribute called free_variables, which contains the list of free
+        Then, at the output is attached a dynamic attribute called `free_variables`, which contains the list of free
         variables contained in the output tensor;
-        model_type: it is a string containing the type of the model (linear, lambda or conv).
+        model_type: it is a string containing the type of the model (model, lambda). This attribute is used to manage
+        a PyTorch model differently from a lambda model.
     """
-    # TODO descrivere la lambda sui model type
-    def __init__(self, predicate_name, input_domain, model=None, layers_size=None, lambda_func=None):
-        """Initializes the ltn predicate with the given nn.Module instance,
-        wrapping it with the ltn-broadcasting mechanism."""
+    def __init__(self, model=None, layers_size=None, lambda_func=None):
+        """
+        Initializes the LTN predicate in three different ways:
+            1. if `model` is not None, it initializes the predicate with the given PyTorch model;
+            2. if `model` is None and `layers_size` is not None, it creates a MLP model with linear layers with
+            dimensions specified by `layers_size` and uses that model as the LTN predicate;
+            3. if `model` is None and `layers_size` is None, it uses the `lambda_func` as a lambda function to represent
+            the LTN predicate. Note that in this case the LTN predicate is not learnable. So, the lambda function has
+            to be used only for simple predicates.
+        Note that if more than one of these parameters is not None, the first parameter that is not None in the order is
+        preferred.
+        """
         super(Predicate, self).__init__()
         if model is None and layers_size is None and lambda_func is None:
-            raise ValueError("A model, or dimension of layers for constructing a model, or a lambda function to be used"
-                             " as a non-trainable model should be given in input.")
-        if model is not None and (layers_size is not None or lambda_func is not None):
-            raise ValueError("A model has been given, so layers_size and lambda_func can't be given.")
-        if model is None and layers_size is not None and lambda_func is not None:
-            raise ValueError("Only one of layers_size and lambda_func can be given.")
-        if model is None and layers_size is not None:
-            model = self.MLP(layers_size)
-            self.model_type = "linear"
-        if model is None and lambda_func is not None:
-            model = self.lambda_operation(lambda_func)
-            self.model_type = "lambda"
-        assert isinstance(input_domain, list), "The input_domain should be a list of domains."
-        self.predicate_name = predicate_name
-        self.input_domain = input_domain
-        if isinstance(model, (nn.Sequential, nn.Module)) and lambda_func is None:
-            model_layers = [layer for layer in model.modules()]
-            first_layer = model_layers[1]  # in position 0 there is the copy of the model
-            if isinstance(first_layer, nn.Linear):
-                self.model_type = "linear"
-                first_layer_size = first_layer.in_features
-                flat_input_domain_size = sum([math.prod(list(domain.shape)) for domain in input_domain])
-                # TODO vedere se rimettere questo controllo, bisogna gestire i differenti input e discrepanze tra i modelli
-                # TODO vedere come hanno fatto loro
-                '''if first_layer_size != flat_input_domain_size:
-                    raise ValueError("The input layer size of the given model does not match the size of the input domain. "
-                                     "The size of the input layer must match the size of the input domain (sum of sizes"
-                                     " of input domains flattened).")'''
-
-        # TODO fare meglio questa parte della convolution perche' e' complicata, per ora i controlli sulle conv non
-        # sono implementati
-        '''
-        if isinstance(first_layer, (torch.nn.Conv1d, torch.nn.Conv2d, torch.nn.Conv3d)):
-            if len(input_domain.shape) != 3:
-                raise ValueError("The given model is a CNN model, but the input domain does not correspond to an image."
-                                 " An image should have three dimensions (width, height, depth). One or more dimensions "
-                                 "are missed.")
-        '''
-        self.grounding = model
+            raise ValueError("A model, or dimension of layers for constructing an MLP model, or a lambda function to "
+                             "be used as a non-trainable model should be given in input.")
+        if model is not None:
+            assert isinstance(model, (nn.Sequential, nn.Module)), "The given model is not a PyTorch model."
+            self.model = model
+            self.model_type = 'model'  # attribute needed to differentiate between PyTorch learnable models and lambdas
+        elif layers_size is not None:
+            assert isinstance(layers_size, tuple), "layers_size must be a tuple of integers."
+            self.model = self.mlp(layers_size)
+            self.model_type = 'model'
+        else:
+            self.model = self.lambda_operation(lambda_func)
+            self.model_type = 'lambda'
 
     def forward(self, inputs, *args, **kwargs):
         """Encapsulates the "self.model.forward()" to handle the ltn-broadcasting.
 
         Args:
             inputs: list of tensors that are ltn terms (ltn variable, ltn constant or
-                    output of a ltn functions).
+                    output of a ltn function) for which the predicate has to be computed.
         Returns:
-            outputs: tensor of truth values, with dimensions s.t. each variable corresponds to one axis.
+            a `torch.Tensor` of truth values representing the result of the predicate, with dimensions s.t.
+            each variable corresponds to one axis.
         """
-        assert isinstance(inputs, list), "The inputs parameter should be a list of tensors."
-        inputs, vars, n_individuals_per_var = cross_grounding_values_of_symbols(inputs, flatten_dim0=True)
-        if self.model_type == "linear":
-            # qui devo fare il flat e la concatenazione degli input
+        assert isinstance(inputs, (list, torch.Tensor)), "The inputs parameter should be a list of tensors or a tensor."
+        if isinstance(inputs, list):
+            inputs, vars, n_individuals_per_var = cross_grounding_values_of_symbols(inputs, flatten_dim0=True)
+        else:
+            # this is the case in which the predicate takes as input only one object (constant, variable, etc.)
+            inputs, vars, n_individuals_per_var = cross_grounding_values_of_symbols([inputs], flatten_dim0=True)
+            inputs = inputs[0]
+
+        if self.model_type == 'model':
+            # I need to flat the inputs and concatenate them to feed them to the predicate network
             flat_inputs = [torch.flatten(x, start_dim=1) for x in inputs]
             inputs = torch.cat(flat_inputs, dim=1) if len(flat_inputs) > 1 else flat_inputs[0]
         if self.model_type == 'lambda':
-            # TODO capire cosa fare con gli input nel caso della lambda come comportarsi, perche' ci sono dei problemi
-            # TODO capire se va bene lasciare lista di tensori, in tal caso definire la lambda in maniera corretta
-            # forse non bisogna fare nessuna trasformazione
+            # define what we need to do
             print()
-            #inputs = torch.cat(inputs, dim=0)
-        outputs = self.grounding(inputs, *args, **kwargs)
+        outputs = self.model(inputs, *args, **kwargs)
         if n_individuals_per_var:
-            # se ci sono delle variabili nella espressione di input, l'output diventa un tensore dove gli assi
-            # corrispondono alle variabili
+            # if the predicate has inputs containing variables, the output is reshaped according to the dimensions of
+            # these variables, in such a way that the first n axes of the output tensor are associated with the n
+            # variables that appear in the inputs of the predicate
             outputs = torch.reshape(outputs, tuple(n_individuals_per_var))
 
-        # TODO capire bene a cosa serve active doms perche' qui ho un active doms per predicato, invece forse ne serve uno per output
         outputs.free_variables = vars
         return outputs
 
@@ -387,11 +290,13 @@ class Predicate(nn.Module):
         return model
 
     @staticmethod
-    def MLP(layer_dims=(16, 16, 1)):
+    def mlp(layer_dims=(16, 16, 1)):
         """
-        It constructs a fully-connected MLP with the layers given in input.
+        It constructs a fully-connected MLP with linear layers with the dimensions given in input. It uses an ELU
+        activation on the hidden layers and a sigmoid on the final layer.
         :param layer_dims: dimensions of the layers of the MLP.
-        :return: an MLP with architecture defined by layers_dim parameter.
+        :return: an MLP with architecture defined by `layers_dim` parameter. The first dimension is the dimension of
+        the input layer, the last dimension is the dimension of the output layer.
         """
         layers = []
         for i in range(1, len(layer_dims)):
@@ -402,10 +307,6 @@ class Predicate(nn.Module):
                 layers.append(nn.Sigmoid())
         model = nn.Sequential(*layers)
         return model
-
-    def __repr__(self):
-        return "Predicate(predicate_name='" + self.predicate_name + "', input_domain=" + repr(self.input_domain) + \
-               ", grounding=" + str(self.grounding) + ")"
 
 
 class Function(nn.Module):
