@@ -126,11 +126,13 @@ class Equiv:
 
 
 class AggregMin:
+    # TODO inserire la gestione dei NaN della maschera anche qui
     def __call__(self, xs, dim=None, keepdim=False):
         return torch.min(xs, dim=dim, keepdim=keepdim)
 
 
 class AggregMax:
+    # TODO inserire la gestione dei NaN della maschera anche qui
     def __call__(self, xs, dim=None, keepdim=False):
         return torch.max(xs, dim=dim, keepdim=keepdim)
 
@@ -139,7 +141,7 @@ class AggregMean:
     def __call__(self, xs, dim=None, keepdim=False):
         numerator = torch.nansum(xs, dim=dim, keepdim=keepdim)
         denominator = torch.sum(~torch.isnan(xs), dim=dim, keepdim=keepdim)
-        return torch.div(numerator / denominator)
+        return torch.div(numerator, denominator)
 
 
 class AggregPMean:

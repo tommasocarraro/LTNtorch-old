@@ -1,6 +1,5 @@
 import torch
 from torch import nn
-import math
 import copy
 import numpy as np
 
@@ -33,7 +32,6 @@ def constant(value, trainable=False):
 
 
 def variable(variable_name, individuals_seq):
-    # TODO descrivere latent_variable una volta capito il significato
     """Function that creates an LTN variable.
 
     An LTN variable denotes a sequence of individuals. It is grounded as a sequence of tensors (groundings of
@@ -53,7 +51,7 @@ def variable(variable_name, individuals_seq):
         the LTN variable. Moreover, a dynamic attribute called latent_variable is added to the output too. This attribute
         is used by LTN for performing diagonal quantification of the variables.
     """
-    if isinstance(individuals_seq, torch.FloatTensor):
+    if isinstance(individuals_seq, torch.Tensor):
         var = individuals_seq
     else:
         var = torch.tensor(individuals_seq)
@@ -500,7 +498,6 @@ def undiag(variables_groundings):
 
 
 class WrapperConnective:
-    # TODO scrivere meglio la documentazione
     """Class to wrap unary/binary connective operators to use them within LTN formulas.
 
     LTN supports various logical connectives. They are grounded using fuzzy semantics.
@@ -532,118 +529,121 @@ class WrapperConnective:
 
 class WrapperQuantifier:
     # TODO scrivere meglio la documentazione, soprattutto per la maschera
-    # TODO vedere se cambiare symbol_grounding in grounding e basta, perche' la formula non e' un simbolo ma ha comunque un grounding
-    """Class to wrap quantification operators to use them within ltn formulas.
+    """Class to wrap quantification operators to use them within LTN formulas.
 
-    LTN supports universal and existential quantification. They are grounded using aggregation operators.
+    LTN supports universal and existential quantification. They are grounded using fuzzy aggregation operators.
     The implementation of some common aggregators using PyTorch primitives is in `ltn.fuzzy_ops`.
     The wrapper allows to use the quantifiers with LTN formulas.
     It takes care of selecting the tensor dimensions to aggregate, given some variables in arguments.
     Additionally, boolean conditions (`mask_fn`,`mask_vars`) can be used for guarded quantification.
     Attributes:
-        aggregation_operator: The original aggregation operator. It is a wrapper for the aggregation operator;
-        quantification_type: it is a string indicating the quantification that has to be performed (exists or forall)
+        aggregation_operator: the fuzzy aggregation operator to perform the desired quantification;
+        quantification_type: it is a string indicating the quantification that has to be performed (exists or forall).
     """
 
     def __init__(self, aggregation_operator, quantification_type):
         self.aggregation_operator = aggregation_operator
         if quantification_type not in ["forall", "exists"]:
-            raise ValueError("The keyword for the quantifier should be \"forall\" or \"exists\".")
+            raise ValueError("The keyword for the quantification operator should be \"forall\" or \"exists\".")
         self.quantification_type = quantification_type
 
-    def __call__(self, variables_groundings, symbol_grounding, mask_vars=None, mask_fn=None, **kwargs):
-        # TODO descrivere bene la documentazione del metodo, tipo variables_groundings sono i grounding delle variabili
-        # TODO forse la quantificazione si applica solo ai predicati e anche i connettivi si applicano solo ai predicati
-        # TODO quindi, correggere la documentazione di conseguenza
-        # da quantificare, symbol_grounding e' il grounding del termine o predicato su cui fare quantificazione, mask_vars
-        # e mask_fn servono per costruire la maschera per la guarded quantification. Mask_vars sono le variabili (sono groundings) su cui
-        # fare guarded, mentre mask_fn e' la funzione da applicare come filtro sul grounding del predicato o termine.
+    def __call__(self, variables_groundings, formula_grounding, mask_vars=None, mask_fn=None, **kwargs):
         """
-        mask_fn(mask_vars)
+        It applies the desired quantification at the input formula (`formula_grounding`) based on the selected
+        variables (`variables_groundings`). It is also possible to perform a guarded quantification. In that case,
+        `mask_vars` and `mask_fn` have to be set properly. If 'mask_vars' and 'mask_fn' are left `None` it means
+        that no guarded quantification has to be performed.
+
+        Args:
+            variables_groundings: groundings of the variables on which the quantification has to be performed;
+            formula_grounding: grounding of the formula that has to be quantified;
+            mask_vars: grounding of the variables that are included in the guarded quantification condition;
+            mask_fn: function which implements the guarded quantification condition. The condition is based on the
+            variables contained in `mask_vars`.
         """
-        # verifico se ho una o piu' variabili su cui quantificare
+        # check if the quantification has to be performed on one or more variables
         variables_groundings = [variables_groundings] if not isinstance(variables_groundings, list) \
             else variables_groundings
-        # pesco le label delle variabili da quantificare
+        # aggregation_vars contains the labels of the variables on which the quantification has to be performed
         aggregation_vars = set([var.free_variables[0] for var in variables_groundings])
-        if mask_fn is not None and mask_vars is not None:
-            # create and apply the mask
-            # compute_mask creates the mask
-            symbol_grounding, mask = compute_mask(symbol_grounding, mask_vars, mask_fn, aggregation_vars)
-            # we apply the mask to the grounding of the predicate or term (forse solo predicato)
-            # vedere se fare il prodotto element-wise qui
-            # masked_symbol_grounding = torch.masked_select(symbol_grounding, mask)  # ritorna una sequenza dei valori del
-            # predicato che soddisfanno la maschera
-            # aggregate
-            # dimensione della variabile su cui aggregare
-            # masked_symbol_grounding = torch.multiply(symbol_grounding, mask)
-            # metto dei NaN dove la maschera mette zero, il resto lascio invariato
-            # la maschera mette NaN dove il valore del predicato deve essere oscurato, e lascia inalterati gli altri valori
-            masked_symbol_grounding = torch.where(
+        # check if guarded quantification has to be performed
+        if mask_fn is not None and mask_vars is not None:  # in this case, the guarded quantification has to be performed
+            # create the mask by using compute_mask() function
+            formula_grounding, mask = compute_mask(formula_grounding, mask_vars, mask_fn, aggregation_vars)
+            # we apply the mask to the grounding of the formula
+            # the idea is to put NaN values where the mask is zero, while the rest of the grounding is kept untouched
+            masked_formula_grounding = torch.where(
                 ~mask,
                 np.nan,
-                symbol_grounding
+                formula_grounding
             )
-            aggregation_dims = [symbol_grounding.free_variables.index(var) for var in aggregation_vars]
-            result = self.aggregation_operator(masked_symbol_grounding, aggregation_dims, **kwargs)
+            # we perform the desired quantification after the mask has been applied
+            aggregation_dims = [formula_grounding.free_variables.index(var) for var in aggregation_vars]
+            output = self.aggregation_operator(masked_formula_grounding, aggregation_dims, **kwargs)
             # For some values in the tensor, the mask can result in aggregating with empty variables.
             #    e.g. forall X ( exists Y:condition(X,Y) ( p(X,Y) ) )
             #       For some values of X, there may be no Y satisfying the condition
             # The result of the aggregation operator in such case is often not defined (e.g. nan).
             # We replace the result with 0.0 if the semantics of the aggregator is exists,
             # or 1.0 if the semantics of the aggregator is forall.
-            empty_quantifier = 1. if self.quantifier == "forall" else 0
+            empty_quantifier = 1. if self.quantification_type == "forall" else 0
             result = torch.where(
-                torch.isnan(result),
+                torch.isnan(output),
                 empty_quantifier,
-                result
+                output
             )
-        else:
-            # aggregation_dim sono le dimensioni su cui fare l'aggregazione. queste dipendono dalle variabili su cui
-            # fare aggregazione e l'operatore aggrega sugli assi di queste variabili
-            aggregation_dims = [symbol_grounding.free_variables.index(var) for var in aggregation_vars]
-            # queste sono le dimensioni su cui la media deve essere fatta
-            result = self.aggregation_operator(symbol_grounding, dim=tuple(aggregation_dims), **kwargs)
-        result.free_variables = [var for var in symbol_grounding.free_variables if var not in aggregation_vars]
+        else:  # in this case, the guarded quantification has not to be performed
+            # aggregation_dims are the dimensions on which the aggregation has to be performed
+            # the aggregator aggregates only on the axes given by aggregations_dims
+            aggregation_dims = [formula_grounding.free_variables.index(var) for var in aggregation_vars]
+            output = self.aggregation_operator(formula_grounding, dim=tuple(aggregation_dims), **kwargs)
+        # update the free variables on the output groundings based on which variables have been aggregated
+        output.free_variables = [var for var in formula_grounding.free_variables if var not in aggregation_vars]
         undiag(variables_groundings)
-        return result
+        return output
 
 
-def compute_mask(symbol_grounding, mask_vars, mask_fn, aggregation_vars):
+def compute_mask(formula_grounding, mask_vars, mask_fn, aggregation_vars):
     """
-    Qui il symbol grounding e' il grounding del predicato o termine. Mask_vars sono i groundings delle variabili su cui applicare la
-    maschera. mask_fn e' la funzione di filtraggio della maschera. aggregation vars sono le label delle variabili su cui fare quantificazione (anche
-    non guarded)
-    :param symbol_grounding:
-    :param mask_vars:
-    :param mask_fn:
-    :param aggregation_vars:
-    :return:
+    It computes the mask for performing the guarded quantification on the grounding of the formula given in input.
+    :param formula_grounding: grounding of the formula that has to be quantified;
+    :param mask_vars: grounding of the variables that are included in the guarded quantification condition;
+    :param mask_fn: function which implements the guarded quantification condition;
+    :param aggregation_vars: list of labels of the variables on which the quantification has to be performed.
+    :return: a tuple where the first element is the grounding of the input formula transposed in such a way that the
+    guarded variables are in the first dimensions, while the second element is the mask that has to be applied over
+    the grounding of the formula in order to perform the guarded quantification.
     """
-    # 1. cross symbol_grounding with groundings of variables that are in the mask but not yet in the formula
-    mask_vars_not_in_symbol_grounding = [var for var in mask_vars
-                                         if var.free_variables[0] not in symbol_grounding.free_variables]
-    symbol_grounding = cross_grounding_values_of_symbols([symbol_grounding] + mask_vars_not_in_symbol_grounding)[0][0]
-    print(symbol_grounding.shape)
-    # 2. set the masked vars on the first axes
+    # 1. cross formula_grounding with groundings of variables that are in the mask but not yet in the formula
+    mask_vars_not_in_formula_grounding = [var for var in mask_vars
+                                         if var.free_variables[0] not in formula_grounding.free_variables]
+    formula_grounding = cross_grounding_values([formula_grounding] + mask_vars_not_in_formula_grounding)[0][0]
+    # 2. set the masked (guarded) vars on the first axes
     vars_in_mask = [var.free_variables[0] for var in mask_vars]
     vars_in_mask_not_aggregated = [var for var in vars_in_mask if var not in aggregation_vars]
     vars_in_mask_aggregated = [var for var in vars_in_mask if var in aggregation_vars]
-    vars_not_in_mask = [var for var in symbol_grounding.free_variables if var not in vars_in_mask]
+    vars_not_in_mask = [var for var in formula_grounding.free_variables if var not in vars_in_mask]
     new_vars_order = vars_in_mask_not_aggregated + vars_in_mask_aggregated + vars_not_in_mask
-    symbol_grounding = transpose_vars(symbol_grounding, new_vars_order)
+    formula_grounding = transpose_vars(formula_grounding, new_vars_order)
     # 3. compute the boolean mask from the masked vars
-    crossed_mask_vars, vars_order_in_mask, n_individuals_per_var = cross_grounding_values_of_symbols(mask_vars, flatten_dim0=True)
-    mask = mask_fn(crossed_mask_vars)  # crea la maschera
-    mask = torch.reshape(mask, tuple(n_individuals_per_var))  # la mette nella shape giusta
-    # 4. shape it according to the var order in symbol_grounding
-    mask.free_variables = vars_order_in_mask  # aggiunge le free variables alla mask
+    crossed_mask_vars, vars_order_in_mask, n_individuals_per_var = cross_grounding_values(mask_vars,
+                                                                                          flat_batch_dim=True)
+    mask = mask_fn(crossed_mask_vars)  # creates the mask
+    mask = torch.reshape(mask, tuple(n_individuals_per_var))  # reshape the mask in such a way that it is compatible with formula_grounding
+    # 4. shape it according to the var order in formula_grounding
+    mask.free_variables = vars_order_in_mask  # adds the free variables to the mask
     mask = transpose_vars(mask, vars_in_mask_not_aggregated + vars_in_mask_aggregated)
-    return symbol_grounding, mask
+    return formula_grounding, mask
 
 
-def transpose_vars(symbol_grounding, new_vars_order):
-    perm = [symbol_grounding.free_variables.index(var) for var in new_vars_order]
-    symbol_grounding = torch.permute(symbol_grounding, perm)
-    symbol_grounding.free_variables = new_vars_order
-    return symbol_grounding
+def transpose_vars(input_grounding, new_vars_order):
+    """
+    It transposes the input grounding using the order of variables given in `new_vars_order`.
+    :param input_grounding: the grounding that has to be transposed.
+    :param new_vars_order: the order of variables to transpose the input grounding.
+    :return: the input grounding transposed according to the order in `new_vars_order`.
+    """
+    perm = [input_grounding.free_variables.index(var) for var in new_vars_order]
+    input_grounding = torch.permute(input_grounding, perm)
+    input_grounding.free_variables = new_vars_order
+    return input_grounding
