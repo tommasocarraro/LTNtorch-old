@@ -50,7 +50,8 @@ def variable(variable_name, individuals_seq):
     Returns:
         a `torch.FloatTensor` representing the LTN variable, where axis 0 is related with the number of individuals in
         the grounding of the variable. Like for the LTN constants, the dynamic attribute `free_variables` is added to
-        the LTN variable.
+        the LTN variable. Moreover, a dynamic attribute called latent_variable is added to the output too. This attribute
+        is used by LTN for performing diagonal quantification of the variables.
     """
     if isinstance(individuals_seq, torch.FloatTensor):
         var = individuals_seq
@@ -121,7 +122,7 @@ def get_n_individuals_of_var(grounding, var):
     return grounding.size(grounding.free_variables.index(var))
 
 
-def cross_grounding_values_of_symbols(symbol_groundings, flatten_dim0=False):
+def cross_grounding_values(input_groundings, flat_batch_dim=False):
     """
     This function creates the combination of all the possible values of the groundings given in input. These are
     the groundings of logical symbols or any expression built on them. These symbols can be ltn variables, constants,
@@ -137,40 +138,39 @@ def cross_grounding_values_of_symbols(symbol_groundings, flatten_dim0=False):
     in input.
 
     Args:
-        symbol_groundings: list of groundings of symbols of potentially different domains for which the combination of
+        input_groundings: list of groundings of expressions of potentially different domains for which the combination of
         values have to be generated. These groundings are related to symbols that can be ltn variables, constants,
         functions, predicates, or any expression built on those.
-        flatten_dim0: if True, it removes the first dimension from the output tensors and flat it. For example, if one
+        flat_batch_dim: if True, it removes the first dimension from the output tensors and flat it. For example, if one
         output tensor has size [3, 2, 2], if flatten_dim0 is set to True, its size becomes [6, 2]. In other words, it
         removes the batch dimensions.
     """
     vars_to_n_individuals = {}
-    for grounding in symbol_groundings:
+    for grounding in input_groundings:
         for var in grounding.free_variables:
             vars_to_n_individuals[var] = get_n_individuals_of_var(grounding, var)
     vars = list(vars_to_n_individuals.keys())
     n_individuals_per_var = list(vars_to_n_individuals.values())
-    crossed_symbol_groundings = []
-    for grounding in symbol_groundings:
-        vars_in_symbol = list(grounding.free_variables)
-        vars_not_in_symbol = list(set(vars).difference(vars_in_symbol))
-        symbol_grounding = grounding
-        for new_var in vars_not_in_symbol:
-            new_idx = len(vars_in_symbol)
-            symbol_grounding = torch.unsqueeze(symbol_grounding, dim=new_idx)
-            symbol_grounding = torch.repeat_interleave(symbol_grounding, repeats=vars_to_n_individuals[new_var],
+    crossed_groundings = []
+    for grounding in input_groundings:
+        vars_in_grounding = list(grounding.free_variables)
+        vars_not_in_grounding = list(set(vars).difference(vars_in_grounding))
+        for new_var in vars_not_in_grounding:
+            new_idx = len(vars_in_grounding)
+            grounding = torch.unsqueeze(grounding, dim=new_idx)
+            grounding = torch.repeat_interleave(grounding, repeats=vars_to_n_individuals[new_var],
                                                        dim=new_idx)
-            vars_in_symbol.append(new_var)
-        perm = [vars_in_symbol.index(var) for var in vars] + list(range(len(vars_in_symbol),
-                                                                        len(symbol_grounding.shape)))
-        symbol_grounding = symbol_grounding.permute(perm)
-        symbol_grounding.free_variables = vars
-        if flatten_dim0:
-            shape_list = [-1] + list(symbol_grounding.shape[len(vars_in_symbol)::])
-            symbol_grounding = torch.reshape(symbol_grounding, shape=tuple(shape_list))
-        crossed_symbol_groundings.append(symbol_grounding)
+            vars_in_grounding.append(new_var)
+        perm = [vars_in_grounding.index(var) for var in vars] + list(range(len(vars_in_grounding),
+                                                                        len(grounding.shape)))
+        grounding = grounding.permute(perm)
+        grounding.free_variables = vars
+        if flat_batch_dim:
+            shape_list = [-1] + list(grounding.shape[len(vars_in_grounding)::])
+            grounding = torch.reshape(grounding, shape=tuple(shape_list))
+        crossed_groundings.append(grounding)
 
-    return crossed_symbol_groundings, vars, n_individuals_per_var
+    return crossed_groundings, vars, n_individuals_per_var
 
 
 class LambdaModel(nn.Module):
@@ -259,10 +259,10 @@ class Predicate(nn.Module):
         """
         assert isinstance(inputs, (list, torch.Tensor)), "The inputs parameter should be a list of tensors or a tensor."
         if isinstance(inputs, list):
-            inputs, vars, n_individuals_per_var = cross_grounding_values_of_symbols(inputs, flatten_dim0=True)
+            inputs, vars, n_individuals_per_var = cross_grounding_values(inputs, flat_batch_dim=True)
         else:
             # this is the case in which the predicate takes as input only one object (constant, variable, etc.)
-            inputs, vars, n_individuals_per_var = cross_grounding_values_of_symbols([inputs], flatten_dim0=True)
+            inputs, vars, n_individuals_per_var = cross_grounding_values([inputs], flat_batch_dim=True)
             inputs = inputs[0]
 
         if self.model_type == 'model':
@@ -388,7 +388,7 @@ class Function(nn.Module):
         assert isinstance(inputs, list), "The inputs parameter should be a list of tensors."
         assert isinstance(output_dim, (tuple, int)), "The size of the output should be a tuple of integers or" \
                                                      " an integer value"
-        inputs, vars, n_individuals_per_var = cross_grounding_values_of_symbols(inputs, flatten_dim0=True)
+        inputs, vars, n_individuals_per_var = cross_grounding_values(inputs, flat_batch_dim=True)
         if self.model_type == 'model':
             # qui devo fare il flat e la concatenazione degli input
             flat_inputs = [torch.flatten(x, start_dim=1) for x in inputs]
@@ -434,10 +434,9 @@ class Function(nn.Module):
 
 
 def diag(variables_groundings):
-    # TODO descrivere bene cosa fanno questi metodi, con tanto di input e output
-    """Sets the given ltn variables for diagonal quantification (no broadcasting between these variables).
+    """Sets the given LTN variables for diagonal quantification (no broadcasting between these variables).
 
-    Given 2 (or more) ltn variables, there are scenarios where one wants to express statements about
+    Given 2 (or more) LTN variables, there are scenarios where one wants to express statements about
     specific pairs (or tuples) only, such that the i-th tuple contains the i-th instances of the variables.
     We allow this using `ltn.diag`.
     Note: diagonal quantification assumes that the variables have the same number of individuals.
@@ -455,29 +454,45 @@ def diag(variables_groundings):
             results[i].append(P(x_i,y_i))
         aggregate(results)
         ```
-    Ltn computes only the "zipped" results.
+    LTN computes only the "zipped" results when diagonal quantification is performed.
+
+    Args:
+        variables_groundings: the grounding of the LTN variables for which the diagonal quantification has to be
+    performed
+    Returns:
+        the groundings of the variables given in input, where the attribute `free_variables` has been changed to allow
+        the use of the diagonal quantification.
     """
+    # check if more than one variable has been given to the function
+    assert len(variables_groundings) > 1, "It is not possible to perform diagonal quantification on a single variable." \
+                                          " At least two variables have to be given."
     # check if variables have the same number of individuals
     n_individuals = [var.shape[0] for var in variables_groundings]
     assert len(set(n_individuals)) == 1, "The given variables have a different number of individuals between each other." \
                                          " It is not possible to perform diagonal quantification between variables that" \
                                          " have a different number of individuals."
-    diag_vars = "diag_" + "_".join([var.latent_variable for var in variables_groundings])
+    diag_vars_label = "diag_" + "_".join([var.latent_variable for var in variables_groundings])
     for var in variables_groundings:
-        var.free_variables = [diag_vars]
+        var.free_variables = [diag_vars_label]
     return variables_groundings
 
 
 def undiag(variables_groundings):
-    """Resets the usual broadcasting strategy for the given ltn variables.
+    """Resets the usual broadcasting strategy for the given LTN variables.
 
     In practice, `ltn.diag` is designed to be used with quantifiers.
     Every quantifier automatically calls `ltn.undiag` after the aggregation is performed,
-    so that the variables keep their normal behavior outside of the formula.
+    so that the variables continue to keep their normal behavior outside of the formula.
     Therefore, it is recommended to use `ltn.diag` only in quantified formulas as follows:
         ```
         Forall(ltn.diag(x,l), C([x,l]))
         ```
+
+    Args:
+        variables_groundings: the grounding of the variables for which the diagonal setting has to be removed.
+    Returns:
+        the same variable groundings given in input with the attribute `free_variables` changed in such a way that
+        the diagonal setting has been removed.
     """
     for var in variables_groundings:
         var.free_variables = [var.latent_variable]
@@ -486,27 +501,33 @@ def undiag(variables_groundings):
 
 class WrapperConnective:
     # TODO scrivere meglio la documentazione
-    """Class to wrap binary connective operators to use them within ltn formulas.
+    """Class to wrap unary/binary connective operators to use them within LTN formulas.
 
     LTN supports various logical connectives. They are grounded using fuzzy semantics.
     The implementation of some common fuzzy logic operators using PyTorch primitives is in `ltn.fuzzy_ops`.
-    The wrapper ltn.WrapperConnective allows to use the operators with LTN formulas.
+    The wrapper `ltn.WrapperConnective` allows to use these fuzzy operators with LTN formulas.
     It takes care of combining sub-formulas that have different variables appearing in them
     (the sub-formulas may have different dimensions that need to be "broadcasted").
     Attributes:
-        connective_operator: the original binary connective operator (without broadcasting).
+        connective_operator: the original unary/binary fuzzy connective operator (without broadcasting).
     """
 
     def __init__(self, connective_operator):
         self.connective_operator = connective_operator
 
-    def __call__(self, *symbol_groundings, **kwargs):
+    def __call__(self, *input_groundings, **kwargs):
+        """
+        It applies the selected fuzzy connective operator to the groundings given in input. To do so, it firstly
+        broadcast the input groundings to make them compatible to apply the operator.
+        :param input_groundings: the groundings of expressions to which the fuzzy connective operator has to be applied.
+        :return: the grounding that is the result of the application of the fuzzy connective operator to the input
+        groundings.
+        """
         # TODO capire a cosa serviva l'eccezione qui
-        # TODO cambiare symbol_groundings in groundings perche' sono groundings
-        symbol_groundings, vars, _ = cross_grounding_values_of_symbols(symbol_groundings)
-        result = self.connective_operator(*symbol_groundings)
-        result.free_variables = vars
-        return result
+        input_groundings, vars, _ = cross_grounding_values(input_groundings)
+        output = self.connective_operator(*input_groundings)
+        output.free_variables = vars
+        return output
 
 
 class WrapperQuantifier:
@@ -521,14 +542,14 @@ class WrapperQuantifier:
     Additionally, boolean conditions (`mask_fn`,`mask_vars`) can be used for guarded quantification.
     Attributes:
         aggregation_operator: The original aggregation operator. It is a wrapper for the aggregation operator;
-        quantifier: it is a string indicating the quantification that has to be performed (exists or forall)
+        quantification_type: it is a string indicating the quantification that has to be performed (exists or forall)
     """
 
-    def __init__(self, aggregation_operator, quantifier):
+    def __init__(self, aggregation_operator, quantification_type):
         self.aggregation_operator = aggregation_operator
-        if quantifier not in ["forall", "exists"]:
+        if quantification_type not in ["forall", "exists"]:
             raise ValueError("The keyword for the quantifier should be \"forall\" or \"exists\".")
-        self.quantifier = quantifier
+        self.quantification_type = quantification_type
 
     def __call__(self, variables_groundings, symbol_grounding, mask_vars=None, mask_fn=None, **kwargs):
         # TODO descrivere bene la documentazione del metodo, tipo variables_groundings sono i grounding delle variabili
@@ -563,7 +584,6 @@ class WrapperQuantifier:
                 np.nan,
                 symbol_grounding
             )
-            # TODO verificare che dove e' nan mi venga fatta l'aggregazione lo stesso
             aggregation_dims = [symbol_grounding.free_variables.index(var) for var in aggregation_vars]
             result = self.aggregation_operator(masked_symbol_grounding, aggregation_dims, **kwargs)
             # For some values in the tensor, the mask can result in aggregating with empty variables.
