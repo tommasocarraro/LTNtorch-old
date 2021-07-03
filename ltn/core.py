@@ -261,7 +261,6 @@ class Predicate(nn.Module):
         else:
             # this is the case in which the predicate takes as input only one object (constant, variable, etc.)
             inputs, vars, n_individuals_per_var = cross_grounding_values([inputs], flat_batch_dim=True)
-            inputs = inputs[0]
 
         if self.model_type == 'model':
             # I need to flat the inputs and concatenate them to feed them to the predicate network
