@@ -5,6 +5,7 @@ import numpy as np
 
 # TODO ricordarsi di mettere il seed per le cose random
 # TODO guardare le proposizioni nel tutorial
+# TODO capire bene come gestire gli input delle reti neurali lambda e lineari
 
 
 def constant(value, trainable=False):
