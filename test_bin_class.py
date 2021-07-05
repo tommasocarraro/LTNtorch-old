@@ -5,7 +5,6 @@ times of TensorFlow and PyTorch implementations.
 import numpy as np
 import ltn
 import torch
-import time
 import logging
 logging.basicConfig()
 logging.getLogger().setLevel(logging.DEBUG)
@@ -50,12 +49,13 @@ def main():
     nr_samples = 100
     data = np.random.uniform([0, 0], [1, 1], (nr_samples, 2))
     labels = np.sum(np.square(data - [.5, .5]), axis=1) < .09
+    print(labels)
     data = data.astype(np.float32)
     labels = labels.astype(np.float32)
     # 50 examples for training; 50 examples for testing
     # here, I have to create PyTorch DataLoader for train and test folds
     train_loader = DataLoader(data[:50], labels[:50], 64, True)
-    test_loader = DataLoader(data[50:], labels[50:], 61, False)
+    test_loader = DataLoader(data[50:], labels[50:], 64, False)
 
     # # LTN
 
@@ -73,64 +73,62 @@ def main():
 
     formula_aggregator = ltn.fuzzy_ops.AggregPMeanError(p=2)
 
+    def compute_accuracy(loader):
+        mean_accuracy = 0.0
+        for data, labels in loader:
+            classification = A.model(torch.tensor(data))
+            classification = torch.where(classification > 0.5, torch.ones_like(classification),
+                                         torch.zeros_like(classification))
+            labels = torch.tensor(labels)
+            labels = labels.view(labels.shape[0], 1)
+            accuracy = torch.where(classification == labels, torch.ones_like(classification),
+                                   torch.zeros_like(classification))
+            mean_accuracy += torch.sum(accuracy) / data.shape[0]
+
+        return mean_accuracy / len(loader)
+
     def axioms(data, labels):
-        x_A = ltn.variable("x_A", data[np.nonzero(labels)])
-        x_not_A = ltn.variable("x_not_A", data[np.nonzero(np.logical_not(labels))])
+        # NB, here A is simply a neural network used for doing binary classification, while x_A and x_not_A are the
+        # positive and negative examples that have to be fed to the network
+        x_A = ltn.variable("x_A", data[np.nonzero(labels)])  # these are the positive examples
+        x_not_A = ltn.variable("x_not_A", data[np.nonzero(np.logical_not(labels))])  # these are the negative examples
         axioms = [
-            Forall(x_A, A(x_A)),
-            Forall(x_not_A, Not(A(x_not_A)))
+            Forall(x_A, A(x_A)),  # we force the predicate A to be true for each positive example
+            Forall(x_not_A, Not(A(x_not_A)))  # we force the negation of the predicate A to be true for every negative
+            # example
         ]
-        axioms = torch.stack(axioms)
-        sat_level = formula_aggregator(axioms, dim=0)
-        return sat_level, axioms
+        axioms = torch.stack(axioms)  # we stack the results of the axioms and use the formula aggregator to aggregate
+        # the results
+        sat_level = formula_aggregator(axioms, dim=0)  # the aggregation of the formulas in the knowledge base returns a
+        # value in [0, 1] that can be seen as a satisfaction level of the knowledge base
+        return sat_level
 
     optimizer = torch.optim.Adam(A.parameters(), lr=0.001)
     log_delay = max(10, len(train_loader) // 10 ** 1)
 
     for epoch in range(1000):
-        epoch_start_time = time.time()
         train_loss = 0.0
         for batch_idx, (data, labels) in enumerate(train_loader):
             optimizer.zero_grad()
             output = axioms(data, labels)
-            loss = 1. - output[0]
+            loss = 1. - output
             loss.backward()
             optimizer.step()
             train_loss += loss.item()
         train_loss = train_loss / len(train_loader)
 
-        if epoch % 100 == 0:
-            time_diff = time.time() - epoch_start_time
+        if epoch % 20 == 0:
             mean_sat_test = 0
             for data, labels in test_loader:
-                mean_sat_test += axioms(data, labels)[0]
+                mean_sat_test += axioms(data, labels)
             mean_sat_train = 0
             for data, labels in train_loader:
-                mean_sat_train += axioms(data, labels)[0]
-            logger.info("| epoch %d | loss %.4f | Train Sat level %.3f | Test Sat Level %.3f | epoch time: %.2fs |",
-                        epoch, train_loss, mean_sat_train / len(train_loader), mean_sat_test / len(test_loader), time_diff)
+                mean_sat_train += axioms(data, labels)
 
-    '''
-    # # Training
-    mean_metrics = tf.keras.metrics.Mean()
+            logger.info(" epoch %d | loss %.4f | Train Sat %.3f | Test Sat %.3f | Train Acc %.3f | Test Acc %.3f",
+                        epoch, train_loss, mean_sat_train / len(train_loader), mean_sat_test / len(test_loader),
+                        compute_accuracy(train_loader), compute_accuracy(test_loader))
 
-    optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
-    for epoch in range(2000):
-        for _data, _labels in ds_train:
-            with tf.GradientTape() as tape:
-                loss = 1. - axioms(_data, _labels)[0]
-            grads = tape.gradient(loss, trainable_variables)
-            optimizer.apply_gradients(zip(grads, trainable_variables))
-        if epoch % 100 == 0:
-            mean_metrics.reset_states()
-            for _data, _labels in ds_test:
-                mean_metrics(axioms(_data, _labels)[0])
-            print("Epoch %d: Sat Level %.3f" % (epoch, mean_metrics.result()))
-    mean_metrics.reset_states()
-    for _data, _labels in ds_test:
-        mean_metrics(axioms(_data, _labels)[0])
-    print("Training finished at Epoch %d with Sat Level %.3f" % (epoch, mean_metrics.result()))
-    '''
 
 if __name__ == "__main__":
     main()
