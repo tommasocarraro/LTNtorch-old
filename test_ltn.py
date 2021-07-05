@@ -22,7 +22,7 @@ def main():
     Not = ltn.WrapperConnective(ltn.fuzzy_ops.NotStandard())
     And = ltn.WrapperConnective(ltn.fuzzy_ops.AndProd())
     Or = ltn.WrapperConnective(ltn.fuzzy_ops.OrProbSum())
-    Implies = ltn.WrapperConnective(ltn.fuzzy_ops.ImpliesReichenbach())
+    Implies = ltn.WrapperConnective(ltn.fuzzy_ops.ImpliesGoguenStrong())
     x = ltn.variable('x', np.random.normal(0., 1., (10, 2)))  # 10 values in R²
     y = ltn.variable('y', np.random.normal(0., 2., (5, 2)))  # 5 values in R²
 

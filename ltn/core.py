@@ -4,6 +4,7 @@ import copy
 import numpy as np
 
 # TODO ricordarsi di mettere il seed per le cose random
+# TODO guardare le proposizioni nel tutorial
 
 
 def constant(value, trainable=False):
@@ -261,13 +262,21 @@ class Predicate(nn.Module):
         else:
             # this is the case in which the predicate takes as input only one object (constant, variable, etc.)
             inputs, vars, n_individuals_per_var = cross_grounding_values([inputs], flat_batch_dim=True)
+            inputs = inputs[0]
 
         if self.model_type == 'model':
             # I need to flat the inputs and concatenate them to feed them to the predicate network
-            flat_inputs = [torch.flatten(x, start_dim=1) for x in inputs]
+            # Here, I flat the input only if it has more than one dimension
+            # If it has only one dimension, it is not necessary to flat the input since it is a vector and PyTorch
+            # supports vectors
+            # Instead, the matrices need to be flatten since PyTorch requires vectors as input
+            # TODO questa cosa non va bene nel caso delle immagini, perche' non dovrei farne il flat. Bisogna trattare
+            # TODO le conv a parte oppure fare che la forward voglia un parametro per fare il flat
+            # TODO capire se e' meglio se il flat dell'input venga gestito dall'utente in fase di pre-processing o no
+            flat_inputs = [torch.flatten(x, start_dim=1) if len(x.shape) > 1 else x for x in inputs]
             inputs = torch.cat(flat_inputs, dim=1) if len(flat_inputs) > 1 else flat_inputs[0]
         if self.model_type == 'lambda':
-            # define what we need to do
+            # TODO definire cosa fare in caso di lambda
             print()
         outputs = self.model(inputs, *args, **kwargs)
         if n_individuals_per_var:
@@ -383,19 +392,29 @@ class Function(nn.Module):
             a `torch.Tensor` of output values (each output is a tensor too), with dimensions s.t. each variable
             corresponds to one axis.
         """
-        assert isinstance(inputs, list), "The inputs parameter should be a list of tensors."
+        assert isinstance(inputs, (list, torch.Tensor)), "The inputs parameter should be a list of tensors or a tensor."
         assert isinstance(output_dim, (tuple, int)), "The size of the output should be a tuple of integers or" \
                                                      " an integer value"
-        inputs, vars, n_individuals_per_var = cross_grounding_values(inputs, flat_batch_dim=True)
+
+        if isinstance(inputs, list):
+            inputs, vars, n_individuals_per_var = cross_grounding_values(inputs, flat_batch_dim=True)
+        else:
+            # this is the case in which the function takes as input only one object (constant, variable, etc.)
+            inputs, vars, n_individuals_per_var = cross_grounding_values([inputs], flat_batch_dim=True)
+            inputs = inputs[0]
+
         if self.model_type == 'model':
-            # qui devo fare il flat e la concatenazione degli input
-            flat_inputs = [torch.flatten(x, start_dim=1) for x in inputs]
+            # flat and concatenation of inputs
+            flat_inputs = [torch.flatten(x, start_dim=1) if len(x.shape) > 1 else x for x in inputs]
             inputs = torch.cat(flat_inputs, dim=1) if len(flat_inputs) > 1 else flat_inputs[0]
         if self.model_type == 'lambda':
+            # TODO capire come gestire l'input qui, perche' a seconda di un caso oppure un altro, potrebbe dare errore
             inputs = torch.cat(inputs, dim=0)
         outputs = self.model(inputs, *args, **kwargs)
-        # qui mi escono gli output flat, ora devo fare una reshape
+        # the outputs are flatten, I need to perform a reshape of the output to create a tensor in the domain of
+        # the output
         output_dim = list(output_dim) if isinstance(output_dim, tuple) else [output_dim]
+        # TODO questo reshape da errori in alcuni casi, vedere di sistemare
         outputs = torch.reshape(outputs, [outputs.shape[0]] + output_dim)
         if n_individuals_per_var:
             # if the function has inputs containing variables, the output is reshaped according to the dimensions of
