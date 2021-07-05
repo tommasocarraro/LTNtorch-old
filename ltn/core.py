@@ -308,6 +308,7 @@ class Predicate(nn.Module):
 
 class Function(nn.Module):
     # TODO pensare a estensione in cui una funzione puo' avere piu' di un output
+    # TODO testare la funzione e vedere come va
     """Function class for LTN.
 
     An ltn function is a mathematical function (pre-defined or learnable) that maps
@@ -527,7 +528,6 @@ class WrapperConnective:
 
 
 class WrapperQuantifier:
-    # TODO scrivere meglio la documentazione, soprattutto per la maschera
     """Class to wrap quantification operators to use them within LTN formulas.
 
     LTN supports universal and existential quantification. They are grounded using fuzzy aggregation operators.
