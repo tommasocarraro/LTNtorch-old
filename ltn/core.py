@@ -375,47 +375,34 @@ class Function(nn.Module):
             self.model = self.lambda_operation(lambda_func)
             self.model_type = 'lambda'
 
-    def forward(self, inputs, output_dim, *args, **kwargs):
+    def forward(self, inputs, *args, **kwargs):
         """Encapsulates the "self.model.forward()" to handle the ltn-broadcasting.
 
         Args:
             inputs: list of tensors that are ltn terms (ltn variable, ltn constant or
                     output of a ltn function) for which the predicate has to be computed.
-            output_dim: tuple of integers or integer representing the size of the final output. For example, if we need
-            that our function returns a tensor in the domain R^(2x2), the output_dim should be (2, 2).
         Returns:
             a `torch.Tensor` of output values (each output is a tensor too), with dimensions s.t. each variable
             corresponds to one axis.
         """
         assert isinstance(inputs, (list, torch.Tensor)), "The inputs parameter should be a list of tensors or a tensor."
-        assert isinstance(output_dim, (tuple, int)), "The size of the output should be a tuple of integers or" \
-                                                     " an integer value"
 
         if isinstance(inputs, list):
             inputs, vars, n_individuals_per_var = cross_grounding_values(inputs, flat_batch_dim=True)
         else:
             # this is the case in which the function takes as input only one object (constant, variable, etc.)
             inputs, vars, n_individuals_per_var = cross_grounding_values([inputs], flat_batch_dim=True)
-            inputs = inputs[0]
 
-        if self.model_type == 'model':
-            # flat and concatenation of inputs
-            flat_inputs = [torch.flatten(x, start_dim=1) if len(x.shape) > 1 else x for x in inputs]
+        outputs = None
+        if self.model_type == 'model' or self.model_type == 'lambda':
+            outputs = self.model(inputs, *args, **kwargs)
+
+        if self.model_type == 'mlp':
+            flat_inputs = [torch.flatten(x, start_dim=1) for x in inputs]
             inputs = torch.cat(flat_inputs, dim=1) if len(flat_inputs) > 1 else flat_inputs[0]
-        if self.model_type == 'lambda':
-            # TODO capire come gestire l'input qui, perche' a seconda di un caso oppure un altro, potrebbe dare errore
-            inputs = torch.cat(inputs, dim=0)
-        outputs = self.model(inputs, *args, **kwargs)
-        # the outputs are flatten, I need to perform a reshape of the output to create a tensor in the domain of
-        # the output
-        output_dim = list(output_dim) if isinstance(output_dim, tuple) else [output_dim]
-        # TODO questo reshape da errori in alcuni casi, vedere di sistemare
-        outputs = torch.reshape(outputs, [outputs.shape[0]] + output_dim)
-        if n_individuals_per_var:
-            # if the function has inputs containing variables, the output is reshaped according to the dimensions of
-            # these variables, in such a way that the first n axes of the output tensor are associated with the n
-            # variables that appear in the inputs of the predicate
-            outputs = torch.reshape(outputs, tuple(n_individuals_per_var + list(outputs.shape[1::])))
+            outputs = self.model(inputs, *args, **kwargs)
+
+        outputs = torch.reshape(outputs, tuple(n_individuals_per_var + list(outputs.shape[1::])))
 
         outputs.free_variables = vars
         return outputs
