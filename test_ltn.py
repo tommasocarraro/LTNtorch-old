@@ -5,15 +5,14 @@ import torch
 class ModelC(torch.nn.Module):
     def __init__(self):
         super(ModelC, self).__init__()
-        self.dense1 = torch.nn.Linear(4, 5).double()
-        self.dense2 = torch.nn.Linear(5, 3).double()
+        self.dense1 = torch.nn.Linear(4, 5)
+        self.dense2 = torch.nn.Linear(5, 3)
         self.elu = torch.nn.ELU()
         self.softmax = torch.nn.Softmax()
 
     def forward(self, inputs):
-        x = inputs[:, :-3]
-        l = inputs[:, -3:]
-        x = self.dense1(x)
+        x, l = inputs
+        x = self.dense1(torch.flatten(x, start_dim=1))
         x = self.dense2(x)
         return torch.sum(x * l, dim=1)
 
@@ -74,7 +73,7 @@ def main():
     points = np.random.rand(50, 2)  # 5 values in [0,1]^2
     x = ltn.variable('x', points)
     y = ltn.variable('y', points)
-    d = ltn.variable('d', [[.1], [.2], [.3], [.4], [.5], [.6], [.7], [.8], [.9]])
+    d = ltn.variable('d', [.1, .2, .3, .4, .5, .6, .7, .8, .9])
 
     eucl_dist = lambda x, y: torch.unsqueeze(torch.norm(x - y, dim=1), dim=1)  # function measuring euclidian distance
     print(Exists(d,

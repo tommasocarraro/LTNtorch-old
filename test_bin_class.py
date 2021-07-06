@@ -77,12 +77,10 @@ def main():
         mean_accuracy = 0.0
         for data, labels in loader:
             classification = A.model(torch.tensor(data))
-            classification = torch.where(classification > 0.5, torch.ones_like(classification),
-                                         torch.zeros_like(classification))
+            classification = torch.where(classification > 0.5, 1., 0.)
             labels = torch.tensor(labels)
             labels = labels.view(labels.shape[0], 1)
-            accuracy = torch.where(classification == labels, torch.ones_like(classification),
-                                   torch.zeros_like(classification))
+            accuracy = torch.where(classification == labels, 1., 0.)
             mean_accuracy += torch.sum(accuracy) / data.shape[0]
 
         return mean_accuracy / len(loader)

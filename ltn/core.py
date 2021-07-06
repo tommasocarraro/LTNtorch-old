@@ -1,10 +1,11 @@
 import torch
 from torch import nn
-import math
 import numpy as np
 
 # TODO ricordarsi di mettere il seed per le cose random
 # TODO guardare le proposizioni nel tutorial
+# TODO vedere se mettere controlli sulle shape di input ai predicati, se matchano con la dim del primo strato
+# TODO implementare la variabile proposizionale
 
 
 def constant(value, trainable=False):
@@ -27,8 +28,7 @@ def constant(value, trainable=False):
         constant, `free_variables` will be empty since a constant does not have free variables.
     """
     # we ensure that the tensor will be a float tensor and not a double tensor
-    value = np.array(value, dtype=np.float32)
-    const = torch.tensor(value, requires_grad=trainable)
+    const = torch.tensor(value, requires_grad=trainable).float()
     const.free_variables = []
     return const
 
@@ -63,8 +63,10 @@ def variable(variable_name, individuals_seq):
         var = torch.tensor(individuals_seq).float()
 
     if len(var.shape) == 1:
-        # add a dimension if there is only one individual in the sequence, since axis 0 represents the batch dimension
-        var = var.view(1, var.shape[0])
+        # adds a dimension to transform the input in the correct shape to work with LTN
+        # it transforms the input into a sequence of individuals in the case it is not a proper sequence
+        # for example, [3, 1, 2] is transformed into [[3], [1], [2]]
+        var = var.view(var.shape[0], 1)
 
     var.free_variables = [variable_name]
     var.latent_variable = variable_name
@@ -279,6 +281,7 @@ class Predicate(nn.Module):
             outputs = self.model(inputs, *args, **kwargs)
 
         outputs = torch.reshape(outputs, tuple(n_individuals_per_var))
+        outputs = outputs.float()
 
         outputs.free_variables = vars
         return outputs
@@ -312,7 +315,6 @@ class Predicate(nn.Module):
 
 class Function(nn.Module):
     # TODO pensare a estensione in cui una funzione puo' avere piu' di un output
-    # TODO testare la funzione e vedere come va
     """Function class for LTN.
 
     An ltn function is a mathematical function (pre-defined or learnable) that maps
@@ -404,6 +406,7 @@ class Function(nn.Module):
 
         outputs = torch.reshape(outputs, tuple(n_individuals_per_var + list(outputs.shape[1::])))
 
+        outputs = outputs.float()
         outputs.free_variables = vars
         return outputs
 
@@ -575,7 +578,7 @@ class WrapperQuantifier:
             masked_formula_grounding = torch.where(
                 ~mask,
                 np.nan,
-                formula_grounding
+                formula_grounding.double()
             )
             # we perform the desired quantification after the mask has been applied
             aggregation_dims = [formula_grounding.free_variables.index(var) for var in aggregation_vars]
@@ -586,8 +589,8 @@ class WrapperQuantifier:
             # The result of the aggregation operator in such case is often not defined (e.g. nan).
             # We replace the result with 0.0 if the semantics of the aggregator is exists,
             # or 1.0 if the semantics of the aggregator is forall.
-            empty_quantifier = 1. if self.quantification_type == "forall" else 0
-            result = torch.where(
+            empty_quantifier = 1. if self.quantification_type == "forall" else 0.
+            output = torch.where(
                 torch.isnan(output),
                 empty_quantifier,
                 output
