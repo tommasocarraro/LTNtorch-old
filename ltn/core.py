@@ -6,6 +6,7 @@ import numpy as np
 # TODO guardare le proposizioni nel tutorial
 # TODO vedere se mettere controlli sulle shape di input ai predicati, se matchano con la dim del primo strato
 # TODO implementare la variabile proposizionale
+# TODO il fatto che cross_values restituisce una lista e' scomodo, vedere come fare perche' in certi casi risulta scomodo
 
 
 def constant(value, trainable=False):
