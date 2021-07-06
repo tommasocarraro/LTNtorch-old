@@ -1,15 +1,13 @@
 import torch
 from torch import nn
-import copy
+import math
 import numpy as np
 
 # TODO ricordarsi di mettere il seed per le cose random
 # TODO guardare le proposizioni nel tutorial
-# TODO capire bene come gestire gli input delle reti neurali lambda e lineari
 
 
 def constant(value, trainable=False):
-    # TODO capire se aggiungere la batch dimension anche per la costante
     """Function that creates an LTN constant.
 
     An LTN constant denotes an individual grounded as a tensor in the Real field.
@@ -28,6 +26,8 @@ def constant(value, trainable=False):
         that associates each variable to one of the axes of the grounding of a formula. Since in this case we have a
         constant, `free_variables` will be empty since a constant does not have free variables.
     """
+    # we ensure that the tensor will be a float tensor and not a double tensor
+    value = np.array(value, dtype=np.float32)
     const = torch.tensor(value, requires_grad=trainable)
     const.free_variables = []
     return const
@@ -53,23 +53,25 @@ def variable(variable_name, individuals_seq):
         the LTN variable. Moreover, a dynamic attribute called latent_variable is added to the output too. This attribute
         is used by LTN for performing diagonal quantification of the variables.
     """
+    if variable_name.startswith("diag"):
+        raise ValueError("Labels starting with diag are reserved.")
     if isinstance(individuals_seq, torch.Tensor):
-        var = individuals_seq
+        # we ensure that the tensor will be a float tensor and not a double tensor
+        var = individuals_seq.float()
     else:
-        var = torch.tensor(individuals_seq)
+        # we ensure that the tensor will be a float tensor and not a double tensor
+        var = torch.tensor(individuals_seq).float()
 
     if len(var.shape) == 1:
         # add a dimension if there is only one individual in the sequence, since axis 0 represents the batch dimension
         var = var.view(1, var.shape[0])
 
-    if variable_name.startswith("diag"):
-        raise ValueError("Labels starting with diag are reserved.")
     var.free_variables = [variable_name]
     var.latent_variable = variable_name
 
     return var
 
-
+'''
 class PropositionalVariable(object):
     # TODO capire come restringere il valore della variabile proposizionale tra 0 e 1, sembra che in PyTorch non si possa
     """PropositionalVariable class for ltn.
@@ -113,6 +115,7 @@ class PropositionalVariable(object):
         ret_grounding = copy.deepcopy(self.grounding)
         ret_grounding.free_variables = self.grounding.free_variables
         return ret_grounding
+'''
 
 
 def get_n_individuals_of_var(grounding, var):
@@ -166,6 +169,7 @@ def cross_grounding_values(input_groundings, flat_batch_dim=False):
         grounding = grounding.permute(perm)
         grounding.free_variables = vars
         if flat_batch_dim:
+            #  this adds the batch dimension if there is not, for example for the constants
             shape_list = [-1] + list(grounding.shape[len(vars_in_grounding)::])
             grounding = torch.reshape(grounding, shape=tuple(shape_list))
         crossed_groundings.append(grounding)
@@ -216,8 +220,8 @@ class Predicate(nn.Module):
         the model returns a real value in [0, 1] for each combination of the values of the groundings given in input.
         Then, at the output is attached a dynamic attribute called `free_variables`, which contains the list of free
         variables contained in the output tensor;
-        model_type: it is a string containing the type of the model (model, lambda). This attribute is used to manage
-        a PyTorch model differently from a lambda model.
+        model_type: it is a string containing the type of the model ('model', 'mlp', 'lambda'). This attribute is used
+        to manage the inputs of the different types of models differently.
     """
     def __init__(self, model=None, layers_size=None, lambda_func=None):
         """
@@ -236,13 +240,13 @@ class Predicate(nn.Module):
             raise ValueError("A model, or dimension of layers for constructing an MLP model, or a lambda function to "
                              "be used as a non-trainable model should be given in input.")
         if model is not None:
-            assert isinstance(model, (nn.Sequential, nn.Module)), "The given model is not a PyTorch model."
+            assert isinstance(model, nn.Module), "The given model is not a PyTorch model."
             self.model = model
-            self.model_type = 'model'  # attribute needed to differentiate between PyTorch learnable models and lambdas
+            self.model_type = 'model'
         elif layers_size is not None:
             assert isinstance(layers_size, tuple), "layers_size must be a tuple of integers."
             self.model = self.mlp(layers_size)
-            self.model_type = 'model'
+            self.model_type = 'mlp'
         else:
             self.model = self.lambda_operation(lambda_func)
             self.model_type = 'lambda'
@@ -263,28 +267,18 @@ class Predicate(nn.Module):
         else:
             # this is the case in which the predicate takes as input only one object (constant, variable, etc.)
             inputs, vars, n_individuals_per_var = cross_grounding_values([inputs], flat_batch_dim=True)
-            inputs = inputs[0]
 
-        if self.model_type == 'model':
-            # I need to flat the inputs and concatenate them to feed them to the predicate network
-            # Here, I flat the input only if it has more than one dimension
-            # If it has only one dimension, it is not necessary to flat the input since it is a vector and PyTorch
-            # supports vectors
-            # Instead, the matrices need to be flatten since PyTorch requires vectors as input
-            # TODO questa cosa non va bene nel caso delle immagini, perche' non dovrei farne il flat. Bisogna trattare
-            # TODO le conv a parte oppure fare che la forward voglia un parametro per fare il flat
-            # TODO capire se e' meglio se il flat dell'input venga gestito dall'utente in fase di pre-processing o no
-            flat_inputs = [torch.flatten(x, start_dim=1) if len(x.shape) > 1 else x for x in inputs]
+        outputs = None  # outputs initialization
+        if self.model_type == 'model' or self.model_type == 'lambda':
+            # the management of the input is left to the model or the lambda function
+            outputs = self.model(inputs, *args, **kwargs)
+        if self.model_type == 'mlp':
+            # if the model is an mlp directly instantiated by LTN, it is necessary to flat the input
+            flat_inputs = [torch.flatten(x, start_dim=1) for x in inputs]  # if len(x.shape) > 1 else x
             inputs = torch.cat(flat_inputs, dim=1) if len(flat_inputs) > 1 else flat_inputs[0]
-        if self.model_type == 'lambda':
-            # TODO definire cosa fare in caso di lambda
-            print()
-        outputs = self.model(inputs, *args, **kwargs)
-        if n_individuals_per_var:
-            # if the predicate has inputs containing variables, the output is reshaped according to the dimensions of
-            # these variables, in such a way that the first n axes of the output tensor are associated with the n
-            # variables that appear in the inputs of the predicate
-            outputs = torch.reshape(outputs, tuple(n_individuals_per_var))
+            outputs = self.model(inputs, *args, **kwargs)
+
+        outputs = torch.reshape(outputs, tuple(n_individuals_per_var))
 
         outputs.free_variables = vars
         return outputs
@@ -349,19 +343,19 @@ class Function(nn.Module):
         the model returns a tensor in the real filed for each combination of the values of the groundings given in input.
         Then, at the output is attached a dynamic attribute called `free_variables`, which contains the list of free
         variables contained in the output tensor;
-        model_type: it is a string containing the type of the model (model, lambda). This attribute is used to manage
-        a PyTorch model differently from a lambda model.
+        model_type: it is a string containing the type of the model ('model', 'mlp', 'lambda'). This attribute is used
+        to manage the inputs of the different types of models differently.
     """
 
     def __init__(self, model=None, layers_size=None, lambda_func=None):
         """
-        Initializes the LTN predicate in three different ways:
-            1. if `model` is not None, it initializes the predicate with the given PyTorch model;
+        Initializes the LTN function in three different ways:
+            1. if `model` is not None, it initializes the function with the given PyTorch model;
             2. if `model` is None and `layers_size` is not None, it creates a MLP model with linear layers with
-            dimensions specified by `layers_size` and uses that model as the LTN predicate;
+            dimensions specified by `layers_size` and uses that model as the LTN function;
             3. if `model` is None and `layers_size` is None, it uses the `lambda_func` as a lambda function to represent
-            the LTN predicate. Note that in this case the LTN predicate is not learnable. So, the lambda function has
-            to be used only for simple predicates.
+            the LTN function. Note that in this case the LTN function is not learnable. So, the lambda function has
+            to be used only for simple functions.
         Note that if more than one of these parameters is not None, the first parameter that is not None in the order is
         preferred.
         """
@@ -370,13 +364,13 @@ class Function(nn.Module):
             raise ValueError("A model, or dimension of layers for constructing an MLP model, or a lambda function to "
                              "be used as a non-trainable model should be given in input.")
         if model is not None:
-            assert isinstance(model, (nn.Sequential, nn.Module)), "The given model is not a PyTorch model."
+            assert isinstance(model, nn.Module), "The given model is not a PyTorch model."
             self.model = model
-            self.model_type = 'model'  # attribute needed to differentiate between PyTorch learnable models and lambdas
+            self.model_type = 'model'
         elif layers_size is not None:
             assert isinstance(layers_size, tuple), "layers_size must be a tuple of integers."
             self.model = self.mlp(layers_size)
-            self.model_type = 'model'
+            self.model_type = 'mlp'
         else:
             self.model = self.lambda_operation(lambda_func)
             self.model_type = 'lambda'
