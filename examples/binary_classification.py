@@ -1,6 +1,6 @@
 """
-Here, we test the binary classification example to see if the implementation is correct and to compare the training
-times of TensorFlow and PyTorch implementations.
+Here, you can find the the binary classification example of the LTN paper. Please, carefully read the example on the
+paper before going through the PyTorch example.
 """
 import numpy as np
 import ltn
@@ -10,6 +10,8 @@ logging.basicConfig()
 logging.getLogger().setLevel(logging.DEBUG)
 logger = logging.getLogger(__name__)
 
+
+# this is a standard PyTorch DataLoader to load the dataset for the training and testing of the model
 class DataLoader(object):
     def __init__(self,
                  data,
@@ -38,22 +40,21 @@ class DataLoader(object):
             yield data, labels
 
 
-
 def main():
     # # Data
     # Sample data from [0,1]^2.
-    # The ground truth positive is data close to the center (.5,.5) (given a threshold)
+    # The ground truth of a data point is positive when the data point is close to the center (.5,.5) (given a threshold)
     # All the other data is considered as negative examples
     np.random.seed(12)
     torch.manual_seed(12)
     nr_samples = 100
     data = np.random.uniform([0, 0], [1, 1], (nr_samples, 2))
     labels = np.sum(np.square(data - [.5, .5]), axis=1) < .09
-    print(labels)
     data = data.astype(np.float32)
     labels = labels.astype(np.float32)
-    # 50 examples for training; 50 examples for testing
-    # here, I have to create PyTorch DataLoader for train and test folds
+
+    # 50 examples are selected for training; 50 examples are selected for testing
+    # batch size is set to 64 meaning that all the examples are included in one single batch since we have only 50 points
     train_loader = DataLoader(data[:50], labels[:50], 64, True)
     test_loader = DataLoader(data[50:], labels[50:], 64, False)
 
@@ -76,11 +77,11 @@ def main():
     def compute_accuracy(loader):
         mean_accuracy = 0.0
         for data, labels in loader:
-            classification = A.model(torch.tensor(data))
-            classification = torch.where(classification > 0.5, 1., 0.)
+            predictions = A.model(torch.tensor(data))
+            predictions = torch.where(predictions > 0.5, 1., 0.)
             labels = torch.tensor(labels)
             labels = labels.view(labels.shape[0], 1)
-            accuracy = torch.where(classification == labels, 1., 0.)
+            accuracy = torch.where(predictions == labels, 1., 0.)
             mean_accuracy += torch.sum(accuracy) / data.shape[0]
 
         return mean_accuracy / len(loader)
@@ -98,11 +99,10 @@ def main():
         axioms = torch.stack(axioms)  # we stack the results of the axioms and use the formula aggregator to aggregate
         # the results
         sat_level = formula_aggregator(axioms, dim=0)  # the aggregation of the formulas in the knowledge base returns a
-        # value in [0, 1] that can be seen as a satisfaction level of the knowledge base
+        # value in [0, 1] which can be seen as a satisfaction level of the knowledge base
         return sat_level
 
     optimizer = torch.optim.Adam(A.parameters(), lr=0.001)
-    log_delay = max(10, len(train_loader) // 10 ** 1)
 
     for epoch in range(1000):
         train_loss = 0.0
@@ -115,6 +115,7 @@ def main():
             train_loss += loss.item()
         train_loss = train_loss / len(train_loader)
 
+        # we print metrics every 20 epochs of training
         if epoch % 20 == 0:
             mean_sat_test = 0
             for data, labels in test_loader:

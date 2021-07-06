@@ -90,8 +90,6 @@ def main():
     x = ltn.variable("x", samples)
     l = ltn.variable("l", onehot_labels)
 
-    # TODO sistemare sta cosa che voglio per forza una lista di liste sulle variabili perche' fa diventare matti
-
     model = ModelC()
 
     C = ltn.Predicate(model)
