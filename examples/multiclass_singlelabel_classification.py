@@ -1,9 +1,13 @@
+"""
+Here, you can find the the multiclass single label classification example of the LTN paper. Please, carefully read the
+example on the paper before going through the PyTorch example.
+"""
 import logging
 import torch
 import numpy as np
 import pandas as pd
 import ltn
-# TODO usare numpy per calcolare le metriche
+from sklearn.metrics import accuracy_score
 logging.basicConfig()
 logging.getLogger().setLevel(logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -39,23 +43,25 @@ class DataLoader(object):
 
 
 class MLP(torch.nn.Module):
+    """
+    This model returns the logits given an input. It does not compute the softmax. The output are not normalized.
+    This is done to separate the accuracy computation from the satisfaction level computation. Go through the example
+    to understand it.
+    """
     def __init__(self, layer_sizes=(4, 16, 16, 8, 3)):
         super(MLP, self).__init__()
         self.elu = torch.nn.ELU()
-        self.softmax = torch.nn.Softmax()
         self.dropout = torch.nn.Dropout(0.2)
         self.linear_layers = torch.nn.ModuleList([torch.nn.Linear(layer_sizes[i - 1], layer_sizes[i])
                                                   for i in range(1, len(layer_sizes))])
 
     def forward(self, inputs, training=False):
-        x = inputs[0]
-        class_label = inputs[1]
+        x = inputs
         for layer in self.linear_layers[:-1]:
             x = layer(x)
             if training:
                 x = self.dropout(x)
-        outputs = self.softmax(self.linear_layers[-1](x))
-        return outputs[:, class_label[0].long()]
+        return self.linear_layers[-1](x)
 
 
 def main():
@@ -64,7 +70,8 @@ def main():
     # # Data
     #
     # Load the iris dataset:
-    # 50 samples from each of three species of iris flowers (setosa, virginica, versicolor), measured with four features.
+    # 50 samples from each of three species of iris flowers (setosa, virginica, versicolor), measured with four
+    # features.
 
     train_data = pd.read_csv("datasets/iris_training.csv")
     test_data = pd.read_csv("datasets/iris_test.csv")
@@ -81,25 +88,15 @@ def main():
     test_labels = np.array(test_labels)
     test_labels = test_labels.astype(np.longlong)
 
-    train_loader = DataLoader(train_data, train_labels, 64)
+    # prepare dataset for training and testing of the model
+    train_loader = DataLoader(train_data, train_labels, 64, shuffle=True)
     test_loader = DataLoader(test_data, test_labels, 64, shuffle=False)
 
-    model = MLP()
-    p = ltn.Predicate(model)
+    logits_model = MLP()
 
-    def compute_accuracy(loader):
-        mean_accuracy = 0.0
-        for data, labels in loader:
-            predictions = model([torch.tensor(data), torch.tensor(labels)])
-            print(predictions)
-            print(torch.argmax(predictions, dim=1))
-            predictions = torch.where(predictions > 0.5, 1., 0.)
-            labels = torch.tensor(labels)
-            labels = labels.view(labels.shape[0], 1)
-            accuracy = torch.where(predictions == labels, 1., 0.)
-            mean_accuracy += torch.sum(accuracy) / data.shape[0]
-
-        return mean_accuracy / len(loader)
+    # the predicate takes the predictions of the logits model and converts them into probabilities in [0, 1]
+    # these probabilities can be interpreted as fuzzy truth values for the predicate
+    p = ltn.Predicate(ltn.utils.LogitsToPredicateModel(logits_model, single_label=True))
 
     # Constants to index/iterate on the classes
     class_A = ltn.constant(0)
@@ -111,6 +108,8 @@ def main():
 
     formula_aggregator = ltn.fuzzy_ops.AggregPMeanError(p=2)
 
+    # this function defines the variables and the axioms that need to be used to train the predicate P
+    # it returns the satisfaction level of the given knowledge base (axioms)
     def axioms(features, labels, training=False):
         x_A = ltn.variable("x_A", features[labels == 0])
         x_B = ltn.variable("x_B", features[labels == 1])
@@ -124,18 +123,38 @@ def main():
         sat_level = formula_aggregator(axioms, dim=0)
         return sat_level
 
+    # define metrics
+
+    # it computes the overall accuracy of the predictions of the trained model using the given data loader (train or test)
+    def compute_accuracy(loader):
+        mean_accuracy = 0.0
+        for data, labels in loader:
+            predictions = logits_model(torch.tensor(data)).detach().numpy()
+            predictions = np.argmax(predictions, axis=1)
+            mean_accuracy += accuracy_score(labels, predictions)
+
+        return mean_accuracy / len(loader)
+
+    # it computes the overall satisfaction level on the knowledge base using the given data loader (train or test)
+    def compute_sat_level(loader):
+        mean_sat = 0
+        for data, labels in loader:
+            mean_sat += axioms(data, labels, training=False)
+        mean_sat /= len(loader)
+        return mean_sat
+
     # # Training
     #
-    # Define the metrics. While training, we measure:
+    # While training, we measure:
     # 1. The level of satisfiability of the Knowledge Base of the training data.
     # 1. The level of satisfiability of the Knowledge Base of the test data.
     # 3. The training accuracy.
     # 4. The test accuracy.
 
-    # Define the training and test step
-
     optimizer = torch.optim.Adam(params=p.parameters(), lr=0.001)
 
+    # training of the predicate P using a loss containing the satisfaction level of the knowledge base
+    # the objective it to maximize the satisfaction level of the knowledge base
     for epoch in range(500):
         train_loss = 0.0
         for batch_idx, (data, labels) in enumerate(train_loader):
@@ -149,16 +168,10 @@ def main():
 
         # we print metrics every 20 epochs of training
         if epoch % 20 == 0:
-            mean_sat_test = 0
-            for data, labels in test_loader:
-                mean_sat_test += axioms(data, labels, training=False)
-            mean_sat_train = 0
-            for data, labels in train_loader:
-                mean_sat_train += axioms(data, labels, training=False)
             # | Train Acc %.3f | Test Acc %.3f compute_accuracy(train_loader), compute_accuracy(test_loader)
-            logger.info(" epoch %d | loss %.4f | Train Sat %.3f | Test Sat %.3f ",
-                        epoch, train_loss, mean_sat_train / len(train_loader), mean_sat_test / len(test_loader))
-            print(compute_accuracy(train_loader))
+            logger.info(" epoch %d | loss %.4f | Train Sat %.3f | Test Sat %.3f | Train Acc %.3f | Test Acc %.3f ",
+                        epoch, train_loss, compute_sat_level(train_loader), compute_sat_level(test_loader),
+                        compute_accuracy(train_loader), compute_accuracy(test_loader))
 
 
 if __name__ == "__main__":

@@ -93,6 +93,8 @@ def main():
         # value in [0, 1] which can be seen as a satisfaction level of the knowledge base
         return sat_level
 
+    # define metrics
+
     # it computes the overall satisfaction level on the knowledge base using the given data loader (train or test)
     def compute_sat_level(loader):
         mean_sat = 0
