@@ -6,6 +6,7 @@ import numpy as np
 import ltn
 import torch
 import logging
+from sklearn.metrics import accuracy_score
 logging.basicConfig()
 logging.getLogger().setLevel(logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -74,18 +75,8 @@ def main():
 
     formula_aggregator = ltn.fuzzy_ops.AggregPMeanError(p=2)
 
-    def compute_accuracy(loader):
-        mean_accuracy = 0.0
-        for data, labels in loader:
-            predictions = A.model(torch.tensor(data))
-            predictions = torch.where(predictions > 0.5, 1., 0.)
-            labels = torch.tensor(labels)
-            labels = labels.view(labels.shape[0], 1)
-            accuracy = torch.where(predictions == labels, 1., 0.)
-            mean_accuracy += torch.sum(accuracy) / data.shape[0]
-
-        return mean_accuracy / len(loader)
-
+    # this function defines the variables and the axioms that need to be used to train the predicate A
+    # it returns the satisfaction level of the given knowledge base (axioms)
     def axioms(data, labels):
         # NB, here A is simply a neural network used for doing binary classification, while x_A and x_not_A are the
         # positive and negative examples that have to be fed to the network
@@ -102,8 +93,28 @@ def main():
         # value in [0, 1] which can be seen as a satisfaction level of the knowledge base
         return sat_level
 
+    # it computes the overall satisfaction level on the knowledge base using the given data loader (train or test)
+    def compute_sat_level(loader):
+        mean_sat = 0
+        for data, labels in loader:
+            mean_sat += axioms(data, labels)
+        mean_sat /= len(loader)
+        return mean_sat
+
+    # it computes the overall accuracy of the predictions of the trained model using the given data loader (train or test)
+    def compute_accuracy(loader):
+        mean_accuracy = 0.0
+        for data, labels in loader:
+            predictions = A.model(torch.tensor(data)).detach().numpy()
+            predictions = np.where(predictions > 0.5, 1., 0.).flatten()
+            mean_accuracy += accuracy_score(labels, predictions)
+
+        return mean_accuracy / len(loader)
+
     optimizer = torch.optim.Adam(A.parameters(), lr=0.001)
 
+    # training of the predicate A using a loss containing the satisfaction level of the knowledge base
+    # the objective it to maximize the satisfaction level of the knowledge base
     for epoch in range(1000):
         train_loss = 0.0
         for batch_idx, (data, labels) in enumerate(train_loader):
@@ -117,15 +128,8 @@ def main():
 
         # we print metrics every 20 epochs of training
         if epoch % 20 == 0:
-            mean_sat_test = 0
-            for data, labels in test_loader:
-                mean_sat_test += axioms(data, labels)
-            mean_sat_train = 0
-            for data, labels in train_loader:
-                mean_sat_train += axioms(data, labels)
-
             logger.info(" epoch %d | loss %.4f | Train Sat %.3f | Test Sat %.3f | Train Acc %.3f | Test Acc %.3f",
-                        epoch, train_loss, mean_sat_train / len(train_loader), mean_sat_test / len(test_loader),
+                        epoch, train_loss, compute_sat_level(train_loader), compute_sat_level(test_loader),
                         compute_accuracy(train_loader), compute_accuracy(test_loader))
 
 
