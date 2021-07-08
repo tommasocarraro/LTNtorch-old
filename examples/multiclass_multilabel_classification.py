@@ -7,7 +7,6 @@ import torch
 import numpy as np
 import pandas as pd
 import ltn
-from sklearn.metrics import accuracy_score
 logging.basicConfig()
 logging.getLogger().setLevel(logging.DEBUG)
 logger = logging.getLogger(__name__)
