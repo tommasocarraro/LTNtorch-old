@@ -159,8 +159,8 @@ def main():
         train_loss = 0.0
         for batch_idx, (data, labels) in enumerate(train_loader):
             optimizer.zero_grad()
-            output = axioms(data, labels, training=True)
-            loss = 1. - output
+            sat_agg = axioms(data, labels, training=True)
+            loss = 1. - sat_agg
             loss.backward()
             optimizer.step()
             train_loss += loss.item()

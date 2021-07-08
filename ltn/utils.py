@@ -17,7 +17,7 @@ class LogitsToPredicateModel(torch.nn.Module):
         """
         super(LogitsToPredicateModel, self).__init__()
         self.logits_model = logits_model
-        self.to_probs = torch.nn.Softmax(dim=1) if single_label else torch.nn.Sigmoid(dim=1)
+        self.to_probs = torch.nn.Softmax(dim=1) if single_label else torch.nn.Sigmoid()
 
     def forward(self, inputs, training=False):
         """
