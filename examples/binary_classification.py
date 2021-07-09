@@ -47,7 +47,6 @@ def main():
     # The ground truth of a data point is positive when the data point is close to the center (.5,.5) (given a threshold)
     # All the other data is considered as negative examples
     np.random.seed(12)
-    torch.manual_seed(12)
     nr_samples = 100
     data = np.random.uniform([0, 0], [1, 1], (nr_samples, 2))
     labels = np.sum(np.square(data - [.5, .5]), axis=1) < .09

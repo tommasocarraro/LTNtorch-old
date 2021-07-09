@@ -65,7 +65,6 @@ class MLP(torch.nn.Module):
 
 
 def main():
-    torch.manual_seed(12)
     np.random.seed(12)
     # # Data
     #

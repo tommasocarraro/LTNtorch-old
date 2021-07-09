@@ -44,7 +44,6 @@ class DataLoader(object):
 
 def main():
     np.random.seed(12)
-    torch.manual_seed(12)
 
     # # Data
     #
