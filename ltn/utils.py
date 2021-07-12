@@ -4,7 +4,6 @@ LTN paper.
 """
 import torch
 import torchvision
-import numpy as np
 
 
 class LogitsToPredicateModel(torch.nn.Module):
@@ -41,6 +40,7 @@ class LogitsToPredicateModel(torch.nn.Module):
         x = inputs[0]
         logits = self.logits_model(x, training)
         probs = self.to_probs(logits)
+        inputs[1] = torch.flatten(inputs[1])
         indices = torch.stack(inputs[1:], dim=1).long()
         return torch.gather(probs, 1, indices)
 
@@ -112,11 +112,19 @@ class MNISTConv(torch.nn.Module):
     """
     CNN that returns linear embeddings for MNIST images. It is used in the single digit and multi digits addition
     examples.
+    Args:
+        conv_channels_sizes: tuple containing the number of channels of the convolutional layers of the model. The first
+        element of the tuple must be the number of input channels of the first conv layer, while the last element
+        of the tuple must be the number of output channels of the last conv layer;
+        kernel_sizes: tuple containing the sizes of the kernels used in the conv layers of the architecture;
+        linear_layers_sizes: tuple containing the sizes of the linear layers used as the final layers of the
+        architecture. The first element of the tuple must be the number of features in input to the first linear layer,
+        while the last element of the tuple must be the number of output features of the last linear layer.
     """
-    def __init__(self, conv_channels_sizes=(1, 6, 16), kernel_sizes=(5, 5), linear_layers_sizes=(100,)):
+    def __init__(self, conv_channels_sizes=(1, 6, 16), kernel_sizes=(5, 5), linear_layers_sizes=(256, 100)):
         super(MNISTConv, self).__init__()
         self.conv_layers = torch.nn.ModuleList([torch.nn.Conv2d(conv_channels_sizes[i - 1], conv_channels_sizes[i],
-                                                                kernel_sizes[i])
+                                                                kernel_sizes[i - 1])
                                                   for i in range(1, len(conv_channels_sizes))])
         self.elu = torch.nn.ELU()
         self.maxpool = torch.nn.MaxPool2d(2)
@@ -124,10 +132,10 @@ class MNISTConv(torch.nn.Module):
                                                   for i in range(1, len(linear_layers_sizes))])
 
     def forward(self, x):
-        for conv in self.convs:
-            x = conv(x)
+        for conv in self.conv_layers:
+            x = self.elu(conv(x))
             x = self.maxpool(x)
-        x = self.flatten(x)
-        for dense in self.denses:
-            x = dense(x)
+        x = torch.flatten(x, start_dim=1)
+        for linear_layer in self.linear_layers:
+            x = self.elu(linear_layer(x))
         return x
