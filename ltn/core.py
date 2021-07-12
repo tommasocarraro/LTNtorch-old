@@ -8,6 +8,7 @@ import numpy as np
 # TODO implementare la variabile proposizionale
 # TODO il fatto che cross_values restituisce una lista e' scomodo, vedere come fare perche' in certi casi risulta scomodo
 # TODO rivedere il discorso active_doms, perche' non mi piace
+import ltn
 
 
 def constant(value, trainable=False):
@@ -32,7 +33,7 @@ def constant(value, trainable=False):
     # we ensure that the tensor will be a float tensor and not a double tensor
     const = torch.tensor(value, requires_grad=trainable).float()
     const.free_variables = []
-    return const
+    return const.to(ltn.device)
 
 
 def variable(variable_name, individuals_seq):
@@ -73,7 +74,7 @@ def variable(variable_name, individuals_seq):
     var.free_variables = [variable_name]
     var.latent_variable = variable_name
 
-    return var
+    return var.to(ltn.device)
 
 '''
 class PropositionalVariable(object):

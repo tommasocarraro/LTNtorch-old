@@ -6,7 +6,6 @@ from sklearn.metrics import accuracy_score
 logging.basicConfig()
 logging.getLogger().setLevel(logging.DEBUG)
 logger = logging.getLogger(__name__)
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # TODO capire come mettere tutto in GPU perche' non funziona questo esperimento
 
 # this is a standard PyTorch DataLoader to load the dataset for the training and testing of the model
@@ -74,7 +73,7 @@ def main():
 
     # Predicates
     logits_model = SingleDigitClassifier()
-    Digit = ltn.Predicate(ltn.utils.LogitsToPredicateModel(logits_model))
+    Digit = ltn.Predicate(ltn.utils.LogitsToPredicateModel(logits_model)).to(ltn.device)
 
     # Fixed variables (they do not change their values during training)
     d1 = ltn.variable("digits1", range(10))
@@ -109,8 +108,8 @@ def main():
     def compute_accuracy(loader):
         mean_accuracy = 0.0
         for operand_images, addition_label in loader:
-            predictions_x = logits_model(torch.unsqueeze(operand_images[:, 0], 1)).detach().numpy()
-            predictions_y = logits_model(torch.unsqueeze(operand_images[:, 1], 1)).detach().numpy()
+            predictions_x = logits_model(torch.unsqueeze(operand_images[:, 0], 1)).detach().cpu().numpy()
+            predictions_y = logits_model(torch.unsqueeze(operand_images[:, 1], 1)).detach().cpu().numpy()
             predictions_x = np.argmax(predictions_x, axis=1)
             predictions_y = np.argmax(predictions_y, axis=1)
             predictions = predictions_x + predictions_y
