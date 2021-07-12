@@ -46,6 +46,7 @@ class LogitsToPredicateModel(torch.nn.Module):
 
 
 def get_mnist_dataset_for_digits_addition(single_digit=True):
+    # TODO modificare la descrizione di questa funzione, che non e' piu' chiara
     """
     It prepares the dataset for the MNIST single digit or multi digits addition example of the LTN paper.
 
@@ -64,40 +65,69 @@ def get_mnist_dataset_for_digits_addition(single_digit=True):
     Note that this is the output of the process for the single digit case. In the multi digits case the lists at points
     1. and 2. will have 4 elements each since in the multi digits case 4 digits are involved in each addition.
     """
-    n_train_examples, n_test_examples, n_operands, label_generator_function = None, None, None, None
     if single_digit:
         n_train_examples = 30000
         n_test_examples = 5000
         n_operands = 2
-        label_generator_function = lambda labels: labels[0] + labels[1]
     else:
         n_train_examples = 15000
         n_test_examples = 2500
         n_operands = 4
-        label_generator_function = lambda labels: 10 * labels[0] + labels[1] + 10 * labels[2] + labels[3]
 
-    mnist_train = torchvision.datasets.MNIST("./examples/datasets/", train=True, download=True,
-                                             transform=torchvision.transforms.ToTensor())
-    mnist_test = torchvision.datasets.MNIST("./examples/datasets/", train=False, download=True,
-                                            transform=torchvision.transforms.ToTensor())
+    # TODO stampa un warning che non riesco a capire, ma probabilmente non ha effetto sul training
+    mnist_train = torchvision.datasets.MNIST("./examples/datasets/", train=True, download=True)
+    mnist_test = torchvision.datasets.MNIST("./examples/datasets/", train=False, download=True)
 
-    train_imgs, train_labels, test_imgs, test_labels = mnist_train.data.numpy(), mnist_train.targets.numpy(), \
-                                                       mnist_test.data.numpy(), mnist_test.targets.numpy()
+    train_imgs, train_labels, test_imgs, test_labels = mnist_train.data, mnist_train.targets, \
+                                                       mnist_test.data, mnist_test.targets
+
+    train_imgs, test_imgs = train_imgs / 255.0, test_imgs / 255.0
 
     imgs_operand_train = [train_imgs[i * n_train_examples:i * n_train_examples + n_train_examples]
                           for i in range(n_operands)]
     labels_operand_train = [train_labels[i * n_train_examples:i * n_train_examples + n_train_examples]
                             for i in range(n_operands)]
 
-    label_addition_train = np.apply_along_axis(label_generator_function, 0, labels_operand_train)
-
     imgs_operand_test = [test_imgs[i * n_test_examples:i * n_test_examples + n_test_examples]
                          for i in range(n_operands)]
-    labels_operand_test = [test_imgs[i * n_test_examples:i * n_test_examples + n_test_examples]
+    labels_operand_test = [test_labels[i * n_test_examples:i * n_test_examples + n_test_examples]
                            for i in range(n_operands)]
-    label_addition_test = np.apply_along_axis(label_generator_function, 0, labels_operand_test)
 
-    train_set = [imgs_operand_train, labels_operand_train, label_addition_train]
-    test_set = [imgs_operand_test, labels_operand_test, label_addition_test]
+    if single_digit:
+        label_addition_train = labels_operand_train[0] + labels_operand_train[1]
+        label_addition_test = labels_operand_test[0] + labels_operand_test[1]
+    else:
+        label_addition_train = 10 * labels_operand_train[0] + labels_operand_train[1] + \
+                               10 * labels_operand_train[2] + labels_operand_train[3]
+        label_addition_test = 10 * labels_operand_test[0] + labels_operand_test[1] + \
+                              10 * labels_operand_test[2] + labels_operand_test[3]
+
+    train_set = [torch.stack(imgs_operand_train, dim=1), label_addition_train]
+    test_set = [torch.stack(imgs_operand_test, dim=1), label_addition_test]
 
     return train_set, test_set
+
+
+class MNISTConv(torch.nn.Module):
+    """
+    CNN that returns linear embeddings for MNIST images. It is used in the single digit and multi digits addition
+    examples.
+    """
+    def __init__(self, conv_channels_sizes=(1, 6, 16), kernel_sizes=(5, 5), linear_layers_sizes=(100,)):
+        super(MNISTConv, self).__init__()
+        self.conv_layers = torch.nn.ModuleList([torch.nn.Conv2d(conv_channels_sizes[i - 1], conv_channels_sizes[i],
+                                                                kernel_sizes[i])
+                                                  for i in range(1, len(conv_channels_sizes))])
+        self.elu = torch.nn.ELU()
+        self.maxpool = torch.nn.MaxPool2d(2)
+        self.linear_layers = torch.nn.ModuleList([torch.nn.Linear(linear_layers_sizes[i - 1], linear_layers_sizes[i])
+                                                  for i in range(1, len(linear_layers_sizes))])
+
+    def forward(self, x):
+        for conv in self.convs:
+            x = conv(x)
+            x = self.maxpool(x)
+        x = self.flatten(x)
+        for dense in self.denses:
+            x = dense(x)
+        return x

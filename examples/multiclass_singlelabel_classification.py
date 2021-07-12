@@ -58,7 +58,7 @@ class MLP(torch.nn.Module):
     def forward(self, inputs, training=False):
         x = inputs
         for layer in self.linear_layers[:-1]:
-            x = layer(x)
+            x = self.elu(layer(x))
             if training:
                 x = self.dropout(x)
         return self.linear_layers[-1](x)

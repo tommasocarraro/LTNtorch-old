@@ -29,7 +29,7 @@ class MLP_classifier(torch.nn.Module):
     def forward(self, inputs):
         x, indices = inputs[0], inputs[1].long()
         for layer in self.linear_layers[:-1]:
-            x = layer(x)
+            x = self.elu(layer(x))
         x = self.softmax(self.linear_layers[-1](x))
         return torch.gather(x, 1, indices)
 
