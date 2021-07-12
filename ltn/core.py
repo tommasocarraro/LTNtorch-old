@@ -31,9 +31,9 @@ def constant(value, trainable=False):
         constant, `free_variables` will be empty since a constant does not have free variables.
     """
     # we ensure that the tensor will be a float tensor and not a double tensor
-    const = torch.tensor(value, requires_grad=trainable).float()
+    const = torch.tensor(value, requires_grad=trainable).float().to(ltn.device)
     const.free_variables = []
-    return const.to(ltn.device)
+    return const
 
 
 def variable(variable_name, individuals_seq):
@@ -60,10 +60,10 @@ def variable(variable_name, individuals_seq):
         raise ValueError("Labels starting with diag are reserved.")
     if isinstance(individuals_seq, torch.Tensor):
         # we ensure that the tensor will be a float tensor and not a double tensor
-        var = individuals_seq.float()
+        var = individuals_seq.float().to(ltn.device)
     else:
         # we ensure that the tensor will be a float tensor and not a double tensor
-        var = torch.tensor(individuals_seq).float()
+        var = torch.tensor(individuals_seq).float().to(ltn.device)
 
     if len(var.shape) == 1:
         # adds a dimension to transform the input in the correct shape to work with LTN
@@ -74,7 +74,7 @@ def variable(variable_name, individuals_seq):
     var.free_variables = [variable_name]
     var.latent_variable = variable_name
 
-    return var.to(ltn.device)
+    return var
 
 '''
 class PropositionalVariable(object):
