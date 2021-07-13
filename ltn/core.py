@@ -9,6 +9,7 @@ import numpy as np
 # TODO il fatto che cross_values restituisce una lista e' scomodo, vedere come fare perche' in certi casi risulta scomodo
 # TODO rivedere il discorso active_doms, perche' non mi piace
 # TODO sistemare il fatto che diag vuole una lista, mettere una tupla come su LTN
+# TODO mettere il .item() quando si calacolano le metriche per non avere problemi di memoria
 import ltn
 
 

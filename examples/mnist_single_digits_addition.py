@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 # TODO capire come mettere tutto in GPU perche' non funziona questo esperimento
 # TODO sistemare il problema di memoria della GPU
 
+
 # this is a standard PyTorch DataLoader to load the dataset for the training and testing of the model
 class DataLoader(object):
     def __init__(self,
@@ -134,7 +135,7 @@ def main():
     # 3. The training accuracy.
     # 4. The test accuracy.
 
-    optimizer = torch.optim.Adam(params=logits_model.parameters(), lr=0.001)
+    optimizer = torch.optim.Adam(params=Digit.parameters(), lr=0.001)
     # TODO fare lo scheduling del p
     # training of the predicate Digit using a loss containing the satisfaction level of the knowledge base
     # the objective is to maximize the satisfaction level of the knowledge base
@@ -155,9 +156,8 @@ def main():
         logger.info(" epoch %d | loss %.4f | Train Sat %.3f | Test Sat %.3f | Train Acc %.3f | Test Acc %.3f ",
                     epoch, train_loss, compute_sat_level(train_loader), compute_sat_level(test_loader),
                     compute_accuracy(train_loader), compute_accuracy(test_loader))'''
-        logger.info(" epoch %d | loss %.4f | Train Sat %.3f ",
-                    epoch, train_loss, compute_sat_level(train_loader))
-
+        logger.info(" epoch %d | loss %.4f ",
+                    epoch, train_loss)
 
 
 if __name__ == "__main__":
