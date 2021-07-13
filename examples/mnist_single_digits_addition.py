@@ -91,7 +91,6 @@ def main():
         images_x = ltn.variable("x", torch.unsqueeze(operand_images[:, 0], 1))
         images_y = ltn.variable("y", torch.unsqueeze(operand_images[:, 1], 1))
         labels_z = ltn.variable("z", addition_label)
-        print(torch.cuda.memory_allocated(ltn.device))
         return Forall(
             ltn.diag([images_x, images_y, labels_z]),
             Exists(
@@ -112,12 +111,15 @@ def main():
         for operand_images, addition_label in loader:
             operand_left = operand_images[:, 0].unsqueeze_(1)
             operand_right = operand_images[:, 1].unsqueeze_(1)
+            print(torch.cuda.memory_allocated(ltn.device))
+            '''
             predictions_x = logits_model(operand_left).detach().cpu().numpy()
             predictions_y = logits_model(operand_right).detach().cpu().numpy()
             predictions_x = np.argmax(predictions_x, axis=1)
             predictions_y = np.argmax(predictions_y, axis=1)
             predictions = predictions_x + predictions_y
             mean_accuracy += accuracy_score(addition_label, predictions)
+            '''
 
         return mean_accuracy / len(loader)
 
