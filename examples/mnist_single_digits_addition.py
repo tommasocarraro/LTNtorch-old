@@ -134,7 +134,7 @@ def main():
     # 3. The training accuracy.
     # 4. The test accuracy.
 
-    optimizer = torch.optim.Adam(params=Digit.parameters(), lr=0.001)
+    optimizer = torch.optim.Adam(params=logits_model.parameters(), lr=0.001)
     # TODO fare lo scheduling del p
     # training of the predicate Digit using a loss containing the satisfaction level of the knowledge base
     # the objective is to maximize the satisfaction level of the knowledge base
