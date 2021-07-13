@@ -109,8 +109,8 @@ def main():
     def compute_accuracy(loader):
         mean_accuracy = 0.0
         for operand_images, addition_label in loader:
-            predictions_x = logits_model(torch.unsqueeze(operand_images[:, 0], 1)).detach().cpu().numpy()
-            predictions_y = logits_model(torch.unsqueeze(operand_images[:, 1], 1)).detach().cpu().numpy()
+            predictions_x = logits_model(torch.unsqueeze(operand_images[:, 0], 1).to(ltn.device)).detach().cpu().numpy()
+            predictions_y = logits_model(torch.unsqueeze(operand_images[:, 1], 1).to(ltn.device)).detach().cpu().numpy()
             predictions_x = np.argmax(predictions_x, axis=1)
             predictions_y = np.argmax(predictions_y, axis=1)
             predictions = predictions_x + predictions_y
@@ -123,7 +123,6 @@ def main():
         mean_sat = 0
         for operand_images, addition_label in loader:
             mean_sat += axioms(operand_images, addition_label).item()
-            print(mean_sat)
         mean_sat /= len(loader)
         return mean_sat
 
