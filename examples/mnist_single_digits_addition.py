@@ -7,6 +7,7 @@ logging.basicConfig()
 logging.getLogger().setLevel(logging.DEBUG)
 logger = logging.getLogger(__name__)
 # TODO capire come mettere tutto in GPU perche' non funziona questo esperimento
+# TODO sistemare il problema di memoria della GPU
 
 # this is a standard PyTorch DataLoader to load the dataset for the training and testing of the model
 class DataLoader(object):
@@ -90,6 +91,7 @@ def main():
         images_x = ltn.variable("x", torch.unsqueeze(operand_images[:, 0], 1))
         images_y = ltn.variable("y", torch.unsqueeze(operand_images[:, 1], 1))
         labels_z = ltn.variable("z", addition_label)
+        print(torch.cuda.memory_allocated(ltn.device))
         return Forall(
             ltn.diag([images_x, images_y, labels_z]),
             Exists(
