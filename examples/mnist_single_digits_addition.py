@@ -144,7 +144,7 @@ def main():
             optimizer.zero_grad()
             sat_agg = axioms(operand_images, addition_label)
             loss = 1. - sat_agg
-            print(loss)
+            print(sat_agg)
             loss.backward()
             optimizer.step()
             train_loss += loss.item()
