@@ -122,7 +122,7 @@ def main():
     def compute_sat_level(loader):
         mean_sat = 0
         for operand_images, addition_label in loader:
-            mean_sat += axioms(operand_images, addition_label)
+            mean_sat += axioms(operand_images, addition_label).item()
             print(mean_sat)
         mean_sat /= len(loader)
         return mean_sat
