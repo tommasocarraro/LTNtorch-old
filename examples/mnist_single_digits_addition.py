@@ -140,10 +140,18 @@ def main():
     # training of the predicate Digit using a loss containing the satisfaction level of the knowledge base
     # the objective is to maximize the satisfaction level of the knowledge base
     for epoch in range(20):
+        if epoch in range(0, 4):
+            p = 1
+        if epoch in range(4, 8):
+            p = 2
+        if epoch in range(8, 12):
+            p = 4
+        if epoch in range(12, 20):
+            p = 6
         train_loss = 0.0
         for batch_idx, (operand_images, addition_label) in enumerate(train_loader):
             optimizer.zero_grad()
-            sat_agg = axioms(operand_images, addition_label)
+            sat_agg = axioms(operand_images, addition_label, p_schedule=p)
             loss = 1. - sat_agg
             loss.backward()
             optimizer.step()
