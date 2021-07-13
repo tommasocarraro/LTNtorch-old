@@ -91,6 +91,7 @@ def main():
         images_x = ltn.variable("x", torch.unsqueeze(operand_images[:, 0], 1))
         images_y = ltn.variable("y", torch.unsqueeze(operand_images[:, 1], 1))
         labels_z = ltn.variable("z", addition_label)
+        print(torch.cuda.memory_allocated(ltn.device))
         return Forall(
             ltn.diag([images_x, images_y, labels_z]),
             Exists(
