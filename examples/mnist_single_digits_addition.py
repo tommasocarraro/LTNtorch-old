@@ -111,7 +111,6 @@ def main():
         for operand_images, addition_label in loader:
             operand_left = operand_images[:, 0].unsqueeze_(1)
             operand_right = operand_images[:, 1].unsqueeze_(1)
-            print(torch.cuda.memory_allocated(ltn.device))
             '''
             predictions_x = logits_model(operand_left).detach().cpu().numpy()
             predictions_y = logits_model(operand_right).detach().cpu().numpy()
@@ -126,7 +125,7 @@ def main():
     # it computes the overall satisfaction level on the knowledge base using the given data loader (train or test)
     def compute_sat_level(loader):
         mean_sat = 0
-        for operand_images, addition_label in loader:
+        for batch_idx, (operand_images, addition_label) in enumerate(loader):
             print(torch.cuda.memory_allocated(ltn.device))
             mean_sat += axioms(operand_images, addition_label)
         mean_sat /= len(loader)
