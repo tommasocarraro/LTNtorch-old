@@ -144,12 +144,11 @@ def main():
             optimizer.zero_grad()
             sat_agg = axioms(operand_images, addition_label)
             loss = 1. - sat_agg
+            print(loss)
             loss.backward()
             optimizer.step()
             train_loss += loss.item()
         train_loss = train_loss / len(train_loader)
-
-        print("fine training")
 
         # we print metrics every epoch of training
         # | Train Acc %.3f | Test Acc %.3f compute_accuracy(train_loader), compute_accuracy(test_loader)
