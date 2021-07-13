@@ -151,9 +151,12 @@ def main():
 
         # we print metrics every epoch of training
         # | Train Acc %.3f | Test Acc %.3f compute_accuracy(train_loader), compute_accuracy(test_loader)
+        '''
         logger.info(" epoch %d | loss %.4f | Train Sat %.3f | Test Sat %.3f | Train Acc %.3f | Test Acc %.3f ",
                     epoch, train_loss, compute_sat_level(train_loader), compute_sat_level(test_loader),
-                    compute_accuracy(train_loader), compute_accuracy(test_loader))
+                    compute_accuracy(train_loader), compute_accuracy(test_loader))'''
+        logger.info(" epoch %d | loss %.4f ",
+                    epoch, train_loss)
 
 
 
