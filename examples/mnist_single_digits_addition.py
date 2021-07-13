@@ -147,7 +147,6 @@ def main():
             loss.backward()
             optimizer.step()
             train_loss += loss.item()
-        print(train_loss)
         train_loss = train_loss / len(train_loader)
 
         # we print metrics every epoch of training
