@@ -108,26 +108,24 @@ def main():
 
     # it computes the overall accuracy of the predictions of the trained model using the given data loader (train or test)
     def compute_accuracy(loader):
-        with torch.no_grad:
-            mean_accuracy = 0.0
-            for operand_images, addition_label in loader:
-                predictions_x = logits_model(torch.unsqueeze(operand_images[:, 0], 1).to(ltn.device)).detach().cpu().numpy()
-                predictions_y = logits_model(torch.unsqueeze(operand_images[:, 1], 1).to(ltn.device)).detach().cpu().numpy()
-                predictions_x = np.argmax(predictions_x, axis=1)
-                predictions_y = np.argmax(predictions_y, axis=1)
-                predictions = predictions_x + predictions_y
-                mean_accuracy += accuracy_score(addition_label, predictions)
+        mean_accuracy = 0.0
+        for operand_images, addition_label in loader:
+            predictions_x = logits_model(torch.unsqueeze(operand_images[:, 0], 1).to(ltn.device)).detach().cpu().numpy()
+            predictions_y = logits_model(torch.unsqueeze(operand_images[:, 1], 1).to(ltn.device)).detach().cpu().numpy()
+            predictions_x = np.argmax(predictions_x, axis=1)
+            predictions_y = np.argmax(predictions_y, axis=1)
+            predictions = predictions_x + predictions_y
+            mean_accuracy += accuracy_score(addition_label, predictions)
 
-            return mean_accuracy / len(loader)
+        return mean_accuracy / len(loader)
 
     # it computes the overall satisfaction level on the knowledge base using the given data loader (train or test)
     def compute_sat_level(loader):
-        with torch.no_grad:
-            mean_sat = 0
-            for operand_images, addition_label in loader:
-                mean_sat += axioms(operand_images, addition_label).item()
-            mean_sat /= len(loader)
-            return mean_sat
+        mean_sat = 0
+        for operand_images, addition_label in loader:
+            mean_sat += axioms(operand_images, addition_label).item()
+        mean_sat /= len(loader)
+        return mean_sat
 
     # # Training
     #

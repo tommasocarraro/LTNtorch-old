@@ -75,8 +75,10 @@ def get_mnist_dataset_for_digits_addition(single_digit=True):
         n_operands = 4
 
     # TODO stampa un warning che non riesco a capire, ma probabilmente non ha effetto sul training
-    mnist_train = torchvision.datasets.MNIST("./examples/datasets/", train=True, download=True)
-    mnist_test = torchvision.datasets.MNIST("./examples/datasets/", train=False, download=True)
+    mnist_train = torchvision.datasets.MNIST("./examples/datasets/", train=True, download=True,
+                                             transform=torchvision.transforms.ToTensor())
+    mnist_test = torchvision.datasets.MNIST("./examples/datasets/", train=False, download=True,
+                                            transform=torchvision.transforms.ToTensor())
 
     train_imgs, train_labels, test_imgs, test_labels = mnist_train.data, mnist_train.targets, \
                                                        mnist_test.data, mnist_test.targets
