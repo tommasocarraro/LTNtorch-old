@@ -89,8 +89,8 @@ def main():
     # this function defines the variables and the axioms that need to be used to train the predicate Digit
     # it returns the satisfaction level of the given knowledge base (axioms)
     def axioms(operand_images, addition_label, p_schedule=2):
-        images_x = ltn.variable("x", torch.unsqueeze(operand_images[:, 0], 1))
-        images_y = ltn.variable("y", torch.unsqueeze(operand_images[:, 1], 1))
+        images_x = ltn.variable("x", operand_images[:, 0])
+        images_y = ltn.variable("y", operand_images[:, 1])
         labels_z = ltn.variable("z", addition_label)
         return Forall(
             ltn.diag([images_x, images_y, labels_z]),
@@ -110,8 +110,8 @@ def main():
     def compute_accuracy(loader):
         mean_accuracy = 0.0
         for operand_images, addition_label in loader:
-            predictions_x = logits_model(torch.unsqueeze(operand_images[:, 0], 1).to(ltn.device)).detach().cpu().numpy()
-            predictions_y = logits_model(torch.unsqueeze(operand_images[:, 1], 1).to(ltn.device)).detach().cpu().numpy()
+            predictions_x = logits_model(operand_images[:, 0].to(ltn.device)).detach().cpu().numpy()
+            predictions_y = logits_model(operand_images[:, 1].to(ltn.device)).detach().cpu().numpy()
             predictions_x = np.argmax(predictions_x, axis=1)
             predictions_y = np.argmax(predictions_y, axis=1)
             predictions = predictions_x + predictions_y
@@ -156,8 +156,6 @@ def main():
         logger.info(" epoch %d | loss %.4f | Train Sat %.3f | Test Sat %.3f | Train Acc %.3f | Test Acc %.3f ",
                     epoch, train_loss, compute_sat_level(train_loader), compute_sat_level(test_loader),
                     compute_accuracy(train_loader), compute_accuracy(test_loader))
-        #logger.info(" epoch %d | loss %.4f ",
-        #            epoch, train_loss)
 
 
 if __name__ == "__main__":

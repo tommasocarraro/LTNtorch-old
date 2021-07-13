@@ -85,6 +85,8 @@ def get_mnist_dataset_for_digits_addition(single_digit=True):
 
     train_imgs, test_imgs = train_imgs / 255.0, test_imgs / 255.0
 
+    train_imgs, test_imgs = torch.unsqueeze(train_imgs, 1), torch.unsqueeze(test_imgs, 1)
+
     imgs_operand_train = [train_imgs[i * n_train_examples:i * n_train_examples + n_train_examples]
                           for i in range(n_operands)]
     labels_operand_train = [train_labels[i * n_train_examples:i * n_train_examples + n_train_examples]
