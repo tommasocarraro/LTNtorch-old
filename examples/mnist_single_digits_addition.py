@@ -6,8 +6,6 @@ from sklearn.metrics import accuracy_score
 logging.basicConfig()
 logging.getLogger().setLevel(logging.DEBUG)
 logger = logging.getLogger(__name__)
-# TODO capire come mettere tutto in GPU perche' non funziona questo esperimento
-# TODO sistemare il problema di memoria della GPU
 
 
 # this is a standard PyTorch DataLoader to load the dataset for the training and testing of the model
@@ -64,23 +62,26 @@ class SingleDigitClassifier(torch.nn.Module):
 
 
 def main():
-    np.random.seed(2021)
-    torch.manual_seed(2021)
-    torch.cuda.manual_seed(2021)
+    seed = 2021
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+
     # DATASET
     train_set, test_set = ltn.utils.get_mnist_dataset_for_digits_addition(single_digit=True)
 
     # create the DataLoader to prepare the dataset for training and testing
     train_loader = DataLoader(train_set, 32)
-    test_loader = DataLoader(test_set, 32)
+    test_loader = DataLoader(test_set, 32, False)
 
     # LTN model
 
-    # Predicates
+    # Predicate Digit of the LTN example on the paper
     logits_model = SingleDigitClassifier()
     Digit = ltn.Predicate(ltn.utils.LogitsToPredicateModel(logits_model)).to(ltn.device)
 
     # Fixed variables (they do not change their values during training)
+    # These variables represent the 10 labels that the digit classifier can return
     d1 = ltn.variable("digits1", range(10))
     d2 = ltn.variable("digits2", range(10))
 
@@ -109,9 +110,11 @@ def main():
 
     # define metrics
 
-    # it computes the overall accuracy of the predictions of the trained model using the given data loader (train or test)
-    def compute_accuracy(loader):
+    # it computes the overall accuracy and satisfaction level of the trained model using the given data loader
+    # (train or test)
+    def compute_metrics(loader):
         mean_accuracy = 0.0
+        mean_sat = 0
         for operand_images, addition_label in loader:
             predictions_x = logits_model(operand_images[:, 0].to(ltn.device)).detach().cpu().numpy()
             predictions_y = logits_model(operand_images[:, 1].to(ltn.device)).detach().cpu().numpy()
@@ -119,16 +122,9 @@ def main():
             predictions_y = np.argmax(predictions_y, axis=1)
             predictions = predictions_x + predictions_y
             mean_accuracy += accuracy_score(addition_label, predictions)
-
-        return mean_accuracy / len(loader)
-
-    # it computes the overall satisfaction level on the knowledge base using the given data loader (train or test)
-    def compute_sat_level(loader):
-        mean_sat = 0
-        for operand_images, addition_label in loader:
             mean_sat += axioms(operand_images, addition_label).item()
-        mean_sat /= len(loader)
-        return mean_sat
+
+        return mean_accuracy / len(loader), mean_sat / len(loader)
 
     # # Training
     #
@@ -140,6 +136,7 @@ def main():
 
     optimizer = torch.optim.Adam(params=Digit.parameters(), lr=0.001)
     # TODO fare lo scheduling del p
+    # TODO vedere cosa c'e' che non va con i seed, il seed 2021 non funziona da loro, capire il problema e risolverlo
     # training of the predicate Digit using a loss containing the satisfaction level of the knowledge base
     # the objective is to maximize the satisfaction level of the knowledge base
     for epoch in range(20):
@@ -155,10 +152,12 @@ def main():
 
         # we print metrics every epoch of training
         # | Train Acc %.3f | Test Acc %.3f compute_accuracy(train_loader), compute_accuracy(test_loader)
+        mean_accuracy_train, mean_sat_train = compute_metrics(train_loader)
+        mean_accuracy_test, mean_sat_test = compute_metrics(test_loader)
 
         logger.info(" epoch %d | loss %.4f | Train Sat %.3f | Test Sat %.3f | Train Acc %.3f | Test Acc %.3f ",
-                    epoch, train_loss, compute_sat_level(train_loader), compute_sat_level(test_loader),
-                    compute_accuracy(train_loader), compute_accuracy(test_loader))
+                    epoch, train_loss, mean_sat_train, mean_sat_test,
+                    mean_accuracy_train, mean_accuracy_test)
 
 
 if __name__ == "__main__":
