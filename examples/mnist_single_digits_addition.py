@@ -108,25 +108,22 @@ def main():
     # it computes the overall accuracy of the predictions of the trained model using the given data loader (train or test)
     def compute_accuracy(loader):
         mean_accuracy = 0.0
+        print("accuracy")
         for operand_images, addition_label in loader:
-            operand_left = operand_images[:, 0].unsqueeze_(1)
-            operand_right = operand_images[:, 1].unsqueeze_(1)
-            '''
-            predictions_x = logits_model(operand_left).detach().cpu().numpy()
-            predictions_y = logits_model(operand_right).detach().cpu().numpy()
+            predictions_x = logits_model(torch.unsqueeze(operand_images[:, 0], 1)).detach().cpu().numpy()
+            predictions_y = logits_model(torch.unsqueeze(operand_images[:, 1], 1)).detach().cpu().numpy()
             predictions_x = np.argmax(predictions_x, axis=1)
             predictions_y = np.argmax(predictions_y, axis=1)
             predictions = predictions_x + predictions_y
             mean_accuracy += accuracy_score(addition_label, predictions)
-            '''
 
         return mean_accuracy / len(loader)
 
     # it computes the overall satisfaction level on the knowledge base using the given data loader (train or test)
     def compute_sat_level(loader):
         mean_sat = 0
-        for batch_idx, (operand_images, addition_label) in enumerate(loader):
-            print(torch.cuda.memory_allocated(ltn.device))
+        print("sat")
+        for operand_images, addition_label in loader:
             mean_sat += axioms(operand_images, addition_label)
         mean_sat /= len(loader)
         return mean_sat
