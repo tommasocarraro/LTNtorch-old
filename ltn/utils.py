@@ -127,7 +127,7 @@ class MNISTConv(torch.nn.Module):
                                                                 kernel_sizes[i - 1])
                                                   for i in range(1, len(conv_channels_sizes))])
         self.elu = torch.nn.ELU()
-        self.maxpool = torch.nn.MaxPool2d(2)
+        self.maxpool = torch.nn.MaxPool2d((2, 2))
         self.linear_layers = torch.nn.ModuleList([torch.nn.Linear(linear_layers_sizes[i - 1], linear_layers_sizes[i])
                                                   for i in range(1, len(linear_layers_sizes))])
 

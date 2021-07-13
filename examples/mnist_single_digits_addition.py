@@ -108,24 +108,26 @@ def main():
 
     # it computes the overall accuracy of the predictions of the trained model using the given data loader (train or test)
     def compute_accuracy(loader):
-        mean_accuracy = 0.0
-        for operand_images, addition_label in loader:
-            predictions_x = logits_model(torch.unsqueeze(operand_images[:, 0], 1).to(ltn.device)).detach().cpu().numpy()
-            predictions_y = logits_model(torch.unsqueeze(operand_images[:, 1], 1).to(ltn.device)).detach().cpu().numpy()
-            predictions_x = np.argmax(predictions_x, axis=1)
-            predictions_y = np.argmax(predictions_y, axis=1)
-            predictions = predictions_x + predictions_y
-            mean_accuracy += accuracy_score(addition_label, predictions)
+        with torch.no_grad:
+            mean_accuracy = 0.0
+            for operand_images, addition_label in loader:
+                predictions_x = logits_model(torch.unsqueeze(operand_images[:, 0], 1).to(ltn.device)).detach().cpu().numpy()
+                predictions_y = logits_model(torch.unsqueeze(operand_images[:, 1], 1).to(ltn.device)).detach().cpu().numpy()
+                predictions_x = np.argmax(predictions_x, axis=1)
+                predictions_y = np.argmax(predictions_y, axis=1)
+                predictions = predictions_x + predictions_y
+                mean_accuracy += accuracy_score(addition_label, predictions)
 
-        return mean_accuracy / len(loader)
+            return mean_accuracy / len(loader)
 
     # it computes the overall satisfaction level on the knowledge base using the given data loader (train or test)
     def compute_sat_level(loader):
-        mean_sat = 0
-        for operand_images, addition_label in loader:
-            mean_sat += axioms(operand_images, addition_label).item()
-        mean_sat /= len(loader)
-        return mean_sat
+        with torch.no_grad:
+            mean_sat = 0
+            for operand_images, addition_label in loader:
+                mean_sat += axioms(operand_images, addition_label).item()
+            mean_sat /= len(loader)
+            return mean_sat
 
     # # Training
     #
@@ -152,12 +154,12 @@ def main():
 
         # we print metrics every epoch of training
         # | Train Acc %.3f | Test Acc %.3f compute_accuracy(train_loader), compute_accuracy(test_loader)
-        '''
+
         logger.info(" epoch %d | loss %.4f | Train Sat %.3f | Test Sat %.3f | Train Acc %.3f | Test Acc %.3f ",
                     epoch, train_loss, compute_sat_level(train_loader), compute_sat_level(test_loader),
-                    compute_accuracy(train_loader), compute_accuracy(test_loader))'''
-        logger.info(" epoch %d | loss %.4f ",
-                    epoch, train_loss)
+                    compute_accuracy(train_loader), compute_accuracy(test_loader))
+        #logger.info(" epoch %d | loss %.4f ",
+        #            epoch, train_loss)
 
 
 if __name__ == "__main__":
