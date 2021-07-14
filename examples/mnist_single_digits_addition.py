@@ -73,10 +73,9 @@ class SingleDigitClassifier(torch.nn.Module):
 
 
 def main():
-    seed = 12  # 2021
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
+    #np.random.seed(seed)
+    #torch.manual_seed(seed)
+    #torch.cuda.manual_seed(seed)
 
     # DATASET
     train_set, test_set = ltn.utils.get_mnist_dataset_for_digits_addition(single_digit=True)
