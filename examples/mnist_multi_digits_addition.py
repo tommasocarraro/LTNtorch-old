@@ -182,6 +182,25 @@ def main():
             optimizer.step()
             train_loss += loss.item()
         train_loss = train_loss / len(train_loader)
+        for batch_idx, (operand_images, addition_label) in enumerate(train_loader):
+            operand_images = operand_images[0]
+            addition_label = addition_label[0]
+            f = operand_images[0]
+            s = operand_images[1]
+            t = operand_images[2]
+            fo = operand_images[3]
+            f = logits_model(f)
+            s = logits_model(s)
+            t = logits_model(t)
+            fo = logits_model(fo)
+            print(f)
+            print(s)
+            print(t)
+            print(fo)
+            print(axioms(operand_images, addition_label))
+            print(f*10+s+t*10+fo)
+            print(addition_label)
+            break
 
         # we print metrics every epoch of training
         mean_accuracy_train, mean_sat_train = compute_metrics(train_loader)
