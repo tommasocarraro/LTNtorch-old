@@ -35,7 +35,6 @@ class MLP_classifier(torch.nn.Module):
 
 
 def main():
-    np.random.seed(12)
     # # Data
     #
     # Generate the clustering dataset
