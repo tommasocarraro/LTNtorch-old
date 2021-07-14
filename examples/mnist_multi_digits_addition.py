@@ -185,14 +185,14 @@ def main():
         for batch_idx, (operand_images, addition_label) in enumerate(train_loader):
             operand_images = operand_images[0]
             addition_label = addition_label[0]
-            f = operand_images[0]
-            s = operand_images[1]
-            t = operand_images[2]
-            fo = operand_images[3]
-            f = logits_model(torch.unsqueeze(f, 1))
-            s = logits_model(torch.unsqueeze(s, 1))
-            t = logits_model(torch.unsqueeze(t, 1))
-            fo = logits_model(torch.unsqueeze(fo, 1))
+            f = operand_images[0].unsqueeze_1(1)
+            s = operand_images[1].unsqueeze_1(1)
+            t = operand_images[2].unsqueeze_1(1)
+            fo = operand_images[3].unsqueeze_1(1)
+            f = logits_model(f.to(ltn.device))
+            s = logits_model(s.to(ltn.device))
+            t = logits_model(t.to(ltn.device))
+            fo = logits_model(fo.to(ltn.device))
             print(f)
             print(s)
             print(t)
