@@ -78,6 +78,10 @@ class SingleDigitClassifier(torch.nn.Module):
 
 
 def main():
+    seed = 2021
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
     # DATASET
     train_set, test_set = ltn.utils.get_mnist_dataset_for_digits_addition(single_digit=False)
 
@@ -108,8 +112,8 @@ def main():
     # see the example in the paper to understand the axiom used in this knowledge base
     def axioms(operand_images, addition_label, p_schedule=2):
         images_x1 = ltn.variable("x1", operand_images[:, 0])
-        images_y1 = ltn.variable("y1", operand_images[:, 1])
-        images_x2 = ltn.variable("x2", operand_images[:, 2])
+        images_y1 = ltn.variable("x2", operand_images[:, 1])
+        images_x2 = ltn.variable("y1", operand_images[:, 2])
         images_y2 = ltn.variable("y2", operand_images[:, 3])
         labels_z = ltn.variable("z", addition_label)
         return Forall(
@@ -117,8 +121,8 @@ def main():
             Exists(
                 [d1, d2, d3, d4],
                 And(
-                    And(Digit([images_x1, d1]), Digit([images_y1, d2])),
-                    And(Digit([images_x2, d3]), Digit([images_y2, d4]))
+                    And(Digit([images_x1, d1]), Digit([images_x2, d2])),
+                    And(Digit([images_y1, d3]), Digit([images_y2, d4]))
                 ),
                 mask_vars=[d1, d2, d3, d4, labels_z],
                 mask_fn=lambda vars: torch.eq(10 * vars[0] + vars[1] + 10 * vars[2] + vars[3], vars[4]),
@@ -136,14 +140,14 @@ def main():
         mean_sat = 0
         for operand_images, addition_label in loader:
             predictions_x1 = logits_model(operand_images[:, 0].to(ltn.device)).detach().cpu().numpy()
-            predictions_y1 = logits_model(operand_images[:, 1].to(ltn.device)).detach().cpu().numpy()
+            predictions_x2 = logits_model(operand_images[:, 1].to(ltn.device)).detach().cpu().numpy()
             predictions_x1 = np.argmax(predictions_x1, axis=1)
-            predictions_y1 = np.argmax(predictions_y1, axis=1)
-            predictions_x2 = logits_model(operand_images[:, 2].to(ltn.device)).detach().cpu().numpy()
+            predictions_x1 = np.argmax(predictions_x1, axis=1)
+            predictions_y1 = logits_model(operand_images[:, 2].to(ltn.device)).detach().cpu().numpy()
             predictions_y2 = logits_model(operand_images[:, 3].to(ltn.device)).detach().cpu().numpy()
-            predictions_x2 = np.argmax(predictions_x2, axis=1)
+            predictions_y1 = np.argmax(predictions_y1, axis=1)
             predictions_y2 = np.argmax(predictions_y2, axis=1)
-            predictions = 10 * predictions_x1 + predictions_y1 + 10 * predictions_x2 + predictions_y2
+            predictions = 10 * predictions_x1 + predictions_x2 + 10 * predictions_y1 + predictions_y2
             mean_accuracy += accuracy_score(addition_label, predictions)
             mean_sat += axioms(operand_images, addition_label).item()
 
