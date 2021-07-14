@@ -1,3 +1,7 @@
+"""
+Here, you can find the the single digits addition example of the LTN paper. Please, carefully read the example on the
+paper before going through the PyTorch example.
+"""
 import logging
 import torch
 import ltn
@@ -40,32 +44,33 @@ class SingleDigitClassifier(torch.nn.Module):
     """
     Model classifying one MNIST digit image into 10 possible classes. It outputs the logits, so it is not a normalized
     output. It has a convolutional part in the initial layers of the architecture and a linear part in the last
-    layers of the architecture. To build the convolutional part it uses a pre-configured convolutional model contained
-    in the `utils.py` file.
+    layers of the architecture. To build the convolutional part a pre-configured convolutional model contained
+    in the `utils.py` file is used.
     Args:
         layers_sizes: tuple containing the sizes of the linear layers used as the final layers of the
         architecture. The first element of the tuple must be the number of features in input to the first linear layer,
-        while the last element of the tuple must be the number of output features of the last linear layer.
+        while the last element of the tuple must be the number of output features of the last linear layer. Specifically,
+        the number of layers constructed is equal to `len(layers_sizes) - 1`.
     """
     def __init__(self, layers_sizes=(100, 84, 10)):
         super(SingleDigitClassifier, self).__init__()
-        self.mnistconv = ltn.utils.MNISTConv()
-        self.tanh = torch.nn.Tanh()
+        self.mnistconv = ltn.utils.MNISTConv()  # this is the convolutional part of the architecture
+        self.tanh = torch.nn.Tanh()  # tanh is used as activation for the linear layers
         self.linear_layers = torch.nn.ModuleList([torch.nn.Linear(layers_sizes[i - 1], layers_sizes[i])
                                                   for i in range(1, len(layers_sizes))])
         self.init_weights()
 
-    def forward(self, inputs, training=False):
+    def forward(self, inputs, training=False):  # the parameter training is not used in this example
         x = inputs
         x = self.mnistconv(x)
         for layer in self.linear_layers[:-1]:
             x = self.tanh(layer(x))
-        return self.linear_layers[-1](x)
+        return self.linear_layers[-1](x)  # in the last layer a sigmoid or a softmax has to be applied
 
     def init_weights(self):
-        r"""Initialize the weights of the network.
-        Weights are initialized with the :py:func:`torch.nn.init.kaiming_uniform_` initializer,
-        while biases are initalized with the :py:func:`torch.nn.init.normal_` initializer.
+        r"""Initialize the weights of the linear layers of the network.
+        Weights are initialized with the :py:func:`torch.nn.init.xavier_uniform_` initializer,
+        while biases are initialized with the :py:func:`torch.nn.init.normal_` initializer.
         """
         for layer in self.linear_layers:
             xavier_uniform_(layer.weight)
@@ -73,11 +78,6 @@ class SingleDigitClassifier(torch.nn.Module):
 
 
 def main():
-    #seed = 12
-    #np.random.seed(seed)
-    #torch.manual_seed(seed)
-    #torch.cuda.manual_seed(seed)
-
     # DATASET
     train_set, test_set = ltn.utils.get_mnist_dataset_for_digits_addition(single_digit=True)
 
@@ -92,7 +92,7 @@ def main():
     Digit = ltn.Predicate(ltn.utils.LogitsToPredicateModel(logits_model)).to(ltn.device)
 
     # Fixed variables (they do not change their values during training)
-    # These variables represent the 10 labels that the digit classifier can return
+    # These variables represent the 10 labels that a MNIST digit can belong to
     d1 = ltn.variable("digits1", range(10))
     d2 = ltn.variable("digits2", range(10))
 
@@ -103,6 +103,7 @@ def main():
 
     # this function defines the variables and the axioms that need to be used to train the predicate Digit
     # it returns the satisfaction level of the given knowledge base (axioms)
+    # see the example in the paper to understand the axiom used in this knowledge base
     def axioms(operand_images, addition_label, p_schedule=2):
         images_x = ltn.variable("x", operand_images[:, 0])
         images_y = ltn.variable("y", operand_images[:, 1])
@@ -146,11 +147,11 @@ def main():
     # 4. The test accuracy.
 
     optimizer = torch.optim.Adam(params=Digit.parameters(), lr=0.001)
-    # TODO fare lo scheduling del p
-    # TODO vedere cosa c'e' che non va con i seed, il seed 2021 non funziona da loro, capire il problema e risolverlo
+
     # training of the predicate Digit using a loss containing the satisfaction level of the knowledge base
     # the objective is to maximize the satisfaction level of the knowledge base
     for epoch in range(20):
+        # scheduling of the parameter p for the existential quantifier as described in the LTN paper
         if epoch in range(0, 4):
             p = 1
         if epoch in range(4, 8):
@@ -170,7 +171,6 @@ def main():
         train_loss = train_loss / len(train_loader)
 
         # we print metrics every epoch of training
-        # | Train Acc %.3f | Test Acc %.3f compute_accuracy(train_loader), compute_accuracy(test_loader)
         mean_accuracy_train, mean_sat_train = compute_metrics(train_loader)
         mean_accuracy_test, mean_sat_test = compute_metrics(test_loader)
 

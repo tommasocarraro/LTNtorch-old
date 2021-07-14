@@ -18,7 +18,7 @@ class LogitsToPredicateModel(torch.nn.Module):
 
     def __init__(self, logits_model, single_label=True):
         """
-        logits_model: a tf Model that outputs logits
+        logits_model: a PyTorch model that outputs logits
         single_label: True for exclusive classes (logits are translated into probabilities using softmax),
                 False for non-exclusive classes (logits are translated into probabilities using sigmoid)
         """
@@ -47,7 +47,6 @@ class LogitsToPredicateModel(torch.nn.Module):
 
 
 def get_mnist_dataset_for_digits_addition(single_digit=True):
-    # TODO modificare la descrizione di questa funzione, che non e' piu' chiara
     """
     It prepares the dataset for the MNIST single digit or multi digits addition example of the LTN paper.
 
@@ -58,13 +57,12 @@ def get_mnist_dataset_for_digits_addition(single_digit=True):
         1. a list [left_operands, right_operands], where left_operands is a list of MNIST images that are used as the
         left operand of the addition, while right_operands is a list of MNIST images that are used as the right operand
         of the addition;
-        2. a list [left_operands_labels, right_operands_labels], where left_operands_labels contains the labels of the
-        MNIST images contained in left_operands, while right_operands_labels contains the labels of the MNIST images
-        contained in right_operands;
-        3. a list `summation` containing the summation of the labels contained in
-        labels = [left_operands_labels, right_operands_labels], s.t. summation[i] = labels[0][i] + labels[1][i].
-    Note that this is the output of the process for the single digit case. In the multi digits case the lists at points
-    1. and 2. will have 4 elements each since in the multi digits case 4 digits are involved in each addition.
+        2. a list containing the summation of the labels of the images contained in the list at point 1. The label of
+        the left operand is added to the label of the right operand, and the target label is generated. This represents
+        the target of the digits addition task.
+    Note that this is the output of the process for the single digit case. In the multi digits case the list at point
+    1. will have 4 elements since in the multi digits case 4 digits are involved in each addition (two digits
+    represent the first operand and two digits the second operand).
     """
     if single_digit:
         n_train_examples = 30000
@@ -75,7 +73,6 @@ def get_mnist_dataset_for_digits_addition(single_digit=True):
         n_test_examples = 2500
         n_operands = 4
 
-    # TODO stampa un warning che non riesco a capire, ma probabilmente non ha effetto sul training
     mnist_train = torchvision.datasets.MNIST("./examples/datasets/", train=True, download=True,
                                              transform=torchvision.transforms.ToTensor())
     mnist_test = torchvision.datasets.MNIST("./examples/datasets/", train=False, download=True,
@@ -116,23 +113,25 @@ def get_mnist_dataset_for_digits_addition(single_digit=True):
 class MNISTConv(torch.nn.Module):
     """
     CNN that returns linear embeddings for MNIST images. It is used in the single digit and multi digits addition
-    examples.
+    examples of the LTN paper.
     Args:
         conv_channels_sizes: tuple containing the number of channels of the convolutional layers of the model. The first
         element of the tuple must be the number of input channels of the first conv layer, while the last element
-        of the tuple must be the number of output channels of the last conv layer;
+        of the tuple must be the number of output channels of the last conv layer. Specifically, the number of conv
+        layers constructed is equal to `len(conv_channels_sizes) - 1`;
         kernel_sizes: tuple containing the sizes of the kernels used in the conv layers of the architecture;
         linear_layers_sizes: tuple containing the sizes of the linear layers used as the final layers of the
         architecture. The first element of the tuple must be the number of features in input to the first linear layer,
-        while the last element of the tuple must be the number of output features of the last linear layer.
+        while the last element of the tuple must be the number of output features of the last linear layer. Specifically,
+        the number of layers constructed is equal to `len(linear_layers_sizes) - 1`.
     """
     def __init__(self, conv_channels_sizes=(1, 6, 16), kernel_sizes=(5, 5), linear_layers_sizes=(256, 100)):
         super(MNISTConv, self).__init__()
         self.conv_layers = torch.nn.ModuleList([torch.nn.Conv2d(conv_channels_sizes[i - 1], conv_channels_sizes[i],
                                                                 kernel_sizes[i - 1])
                                                   for i in range(1, len(conv_channels_sizes))])
-        self.relu = torch.nn.ReLU()
-        self.tanh = torch.nn.Tanh()
+        self.relu = torch.nn.ReLU()  # relu is used as activation for the conv layers
+        self.tanh = torch.nn.Tanh()  # tanh is used as activation for the linear layers
         self.maxpool = torch.nn.MaxPool2d((2, 2))
         self.linear_layers = torch.nn.ModuleList([torch.nn.Linear(linear_layers_sizes[i - 1], linear_layers_sizes[i])
                                                   for i in range(1, len(linear_layers_sizes))])
@@ -150,8 +149,9 @@ class MNISTConv(torch.nn.Module):
 
     def init_weights(self):
         r"""Initialize the weights of the network.
-        Weights are initialized with the :py:func:`torch.nn.init.kaiming_uniform_` initializer,
-        while biases are initalized with the :py:func:`torch.nn.init.normal_` initializer.
+        Weights of conv layers are initialized with the :py:func:`torch.nn.init.kaiming_uniform_` initializer,
+        weights of linear layers are initialized with the :py:func:`torch.nn.init.xavier_uniform_` initializer,
+        while biases are initialized with the :py:func:`torch.nn.init.normal_` initializer.
         """
         for layer in self.conv_layers:
             kaiming_uniform_(layer.weight)
