@@ -3,6 +3,7 @@ import torch
 import ltn
 import numpy as np
 from sklearn.metrics import accuracy_score
+from torch.nn.init import kaiming_uniform_, normal_
 logging.basicConfig()
 logging.getLogger().setLevel(logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -49,20 +50,30 @@ class SingleDigitClassifier(torch.nn.Module):
     def __init__(self, layers_sizes=(100, 84, 10)):
         super(SingleDigitClassifier, self).__init__()
         self.mnistconv = ltn.utils.MNISTConv()
-        self.elu = torch.nn.ELU()
+        self.lrelu = torch.nn.LeakyReLU(0.1)
         self.linear_layers = torch.nn.ModuleList([torch.nn.Linear(layers_sizes[i - 1], layers_sizes[i])
                                                   for i in range(1, len(layers_sizes))])
+        self.init_weights()
 
     def forward(self, inputs, training=False):
         x = inputs
         x = self.mnistconv(x)
         for layer in self.linear_layers[:-1]:
-            x = self.elu(layer(x))
+            x = self.lrelu(layer(x))
         return self.linear_layers[-1](x)
+
+    def init_weights(self):
+        r"""Initialize the weights of the network.
+        Weights are initialized with the :py:func:`torch.nn.init.kaiming_uniform_` initializer,
+        while biases are initalized with the :py:func:`torch.nn.init.normal_` initializer.
+        """
+        for layer in self.linear_layers:
+            kaiming_uniform_(layer.weight, 0.1)
+            normal_(layer.bias)
 
 
 def main():
-    seed = 2021
+    seed = 12  # 2021
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
