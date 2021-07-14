@@ -4,7 +4,7 @@ LTN paper.
 """
 import torch
 import torchvision
-from torch.nn.init import kaiming_uniform_, normal_
+from torch.nn.init import kaiming_uniform_, normal_, xavier_uniform_
 
 
 class LogitsToPredicateModel(torch.nn.Module):
@@ -131,7 +131,8 @@ class MNISTConv(torch.nn.Module):
         self.conv_layers = torch.nn.ModuleList([torch.nn.Conv2d(conv_channels_sizes[i - 1], conv_channels_sizes[i],
                                                                 kernel_sizes[i - 1])
                                                   for i in range(1, len(conv_channels_sizes))])
-        self.lrelu = torch.nn.LeakyReLU(0.1)
+        self.relu = torch.nn.ReLU()
+        self.tanh = torch.nn.Tanh()
         self.maxpool = torch.nn.MaxPool2d((2, 2))
         self.linear_layers = torch.nn.ModuleList([torch.nn.Linear(linear_layers_sizes[i - 1], linear_layers_sizes[i])
                                                   for i in range(1, len(linear_layers_sizes))])
@@ -140,11 +141,11 @@ class MNISTConv(torch.nn.Module):
 
     def forward(self, x):
         for conv in self.conv_layers:
-            x = self.lrelu(conv(x))
+            x = self.relu(conv(x))
             x = self.maxpool(x)
         x = torch.flatten(x, start_dim=1)
         for linear_layer in self.linear_layers:
-            x = self.lrelu(linear_layer(x))
+            x = self.tanh(linear_layer(x))
         return x
 
     def init_weights(self):
@@ -153,9 +154,9 @@ class MNISTConv(torch.nn.Module):
         while biases are initalized with the :py:func:`torch.nn.init.normal_` initializer.
         """
         for layer in self.conv_layers:
-            kaiming_uniform_(layer.weight, 0.1)
+            kaiming_uniform_(layer.weight)
             normal_(layer.bias)
 
         for layer in self.linear_layers:
-            kaiming_uniform_(layer.weight, 0.1)
+            xavier_uniform_(layer.weight)
             normal_(layer.bias)
