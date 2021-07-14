@@ -189,10 +189,10 @@ def main():
             s = operand_images[1]
             t = operand_images[2]
             fo = operand_images[3]
-            f = logits_model(f)
-            s = logits_model(s)
-            t = logits_model(t)
-            fo = logits_model(fo)
+            f = logits_model(torch.unsqueeze(f, 1))
+            s = logits_model(torch.unsqueeze(s, 1))
+            t = logits_model(torch.unsqueeze(t, 1))
+            fo = logits_model(torch.unsqueeze(fo, 1))
             print(f)
             print(s)
             print(t)
