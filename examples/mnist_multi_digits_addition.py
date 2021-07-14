@@ -124,7 +124,7 @@ def main():
                 mask_fn=lambda vars: torch.eq(10 * vars[0] + vars[1] + 10 * vars[2] + vars[3], vars[4]),
                 p=p_schedule
             ),
-            p=2
+            p=1
         )
 
     # define metrics
