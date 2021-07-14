@@ -142,7 +142,7 @@ def main():
             predictions_x1 = logits_model(operand_images[:, 0].to(ltn.device)).detach().cpu().numpy()
             predictions_x2 = logits_model(operand_images[:, 1].to(ltn.device)).detach().cpu().numpy()
             predictions_x1 = np.argmax(predictions_x1, axis=1)
-            predictions_x1 = np.argmax(predictions_x1, axis=1)
+            predictions_x2 = np.argmax(predictions_x2, axis=1)
             predictions_y1 = logits_model(operand_images[:, 2].to(ltn.device)).detach().cpu().numpy()
             predictions_y2 = logits_model(operand_images[:, 3].to(ltn.device)).detach().cpu().numpy()
             predictions_y1 = np.argmax(predictions_y1, axis=1)
