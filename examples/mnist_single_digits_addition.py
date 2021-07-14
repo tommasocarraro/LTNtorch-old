@@ -73,7 +73,7 @@ class SingleDigitClassifier(torch.nn.Module):
 
 
 def main():
-    seed = 2021
+    seed = 12
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
