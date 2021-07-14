@@ -101,6 +101,7 @@ def get_mnist_dataset_for_digits_addition(single_digit=True):
     else:
         label_addition_train = 10 * labels_operand_train[0] + labels_operand_train[1] + \
                                10 * labels_operand_train[2] + labels_operand_train[3]
+
         label_addition_test = 10 * labels_operand_test[0] + labels_operand_test[1] + \
                               10 * labels_operand_test[2] + labels_operand_test[3]
 
