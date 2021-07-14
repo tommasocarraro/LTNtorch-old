@@ -58,13 +58,15 @@ class SingleDigitClassifier(torch.nn.Module):
         self.tanh = torch.nn.Tanh()  # tanh is used as activation for the linear layers
         self.linear_layers = torch.nn.ModuleList([torch.nn.Linear(layers_sizes[i - 1], layers_sizes[i])
                                                   for i in range(1, len(layers_sizes))])
+        self.batch_norm_layers = torch.nn.ModuleList([torch.nn.BatchNorm1d(layers_sizes[i])
+                                                      for i in range(1, len(layers_sizes))])
         self.init_weights()
 
     def forward(self, inputs, training=False):  # the parameter training is not used in this example
         x = inputs
         x = self.mnistconv(x)
-        for layer in self.linear_layers[:-1]:
-            x = self.tanh(layer(x))
+        for i in range(len(self.linear_layers) - 1):
+            x = self.tanh(self.batch_norm_layers[i](self.linear_layers[i](x)))
         return self.linear_layers[-1](x)  # in the last layer a sigmoid or a softmax has to be applied
 
     def init_weights(self):

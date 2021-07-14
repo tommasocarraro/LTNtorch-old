@@ -136,6 +136,8 @@ class MNISTConv(torch.nn.Module):
         self.maxpool = torch.nn.MaxPool2d((2, 2))
         self.linear_layers = torch.nn.ModuleList([torch.nn.Linear(linear_layers_sizes[i - 1], linear_layers_sizes[i])
                                                   for i in range(1, len(linear_layers_sizes))])
+        self.batch_norm_layers = torch.nn.ModuleList([torch.nn.BatchNorm1d(linear_layers_sizes[i])
+                                                      for i in range(1, len(linear_layers_sizes))])
 
         self.init_weights()
 
@@ -144,8 +146,8 @@ class MNISTConv(torch.nn.Module):
             x = self.relu(conv(x))
             x = self.maxpool(x)
         x = torch.flatten(x, start_dim=1)
-        for linear_layer in self.linear_layers:
-            x = self.tanh(linear_layer(x))
+        for i in range(len(self.linear_layers)):
+            x = self.tanh(self.batch_norm_layers[i](self.linear_layers[i](x)))
         return x
 
     def init_weights(self):
