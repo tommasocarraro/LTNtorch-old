@@ -78,10 +78,6 @@ class SingleDigitClassifier(torch.nn.Module):
 
 
 def main():
-    seed = 2021
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
     # DATASET
     train_set, test_set = ltn.utils.get_mnist_dataset_for_digits_addition(single_digit=False)
 
@@ -117,7 +113,7 @@ def main():
         images_y2 = ltn.variable("y2", operand_images[:, 3])
         labels_z = ltn.variable("z", addition_label)
         return Forall(
-            ltn.diag([images_x1, images_y1, images_x2, images_y2, labels_z]),
+            ltn.diag([images_x1, images_x2, images_y1, images_y2, labels_z]),
             Exists(
                 [d1, d2, d3, d4],
                 And(
