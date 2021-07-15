@@ -111,8 +111,8 @@ def main():
     # see the example in the paper to understand the axiom used in this knowledge base
     def axioms(operand_images, addition_label, p_schedule=2):
         images_x1 = ltn.variable("x1", operand_images[:, 0])
-        images_y1 = ltn.variable("x2", operand_images[:, 1])
-        images_x2 = ltn.variable("y1", operand_images[:, 2])
+        images_x2 = ltn.variable("x2", operand_images[:, 1])
+        images_y1 = ltn.variable("y1", operand_images[:, 2])
         images_y2 = ltn.variable("y2", operand_images[:, 3])
         labels_z = ltn.variable("z", addition_label)
         return Forall(
