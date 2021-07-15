@@ -183,7 +183,7 @@ def main():
             test_loss += loss.item()
             test_sat += sat_agg
         test_loss = test_loss / len(test_loader)
-        test_sat = test_sat / len(train_loader)
+        test_sat = test_sat / len(test_loader)
 
         # we print metrics every epoch of training
         #mean_accuracy_train, mean_sat_train = compute_metrics(train_loader)
