@@ -159,7 +159,7 @@ def main():
             predictions_x = torch.argmax(logits_model(operand_images[:, 0].to(ltn.device)), dim=1)
             predictions_y = torch.argmax(logits_model(operand_images[:, 1].to(ltn.device)), dim=1)
             predictions = predictions_x + predictions_y
-            train_acc += torch.count_nonzero(torch.eq(addition_label.to(ltn.device), predictions))
+            train_acc += torch.count_nonzero(torch.eq(addition_label.to(ltn.device), predictions)) / predictions.shape[0]
         train_loss = train_loss / len(train_loader)
         train_sat = train_sat / len(train_loader)
         train_acc = train_acc / len(train_loader)
@@ -174,7 +174,7 @@ def main():
             predictions_x = torch.argmax(logits_model(operand_images[:, 0].to(ltn.device)), dim=1)
             predictions_y = torch.argmax(logits_model(operand_images[:, 1].to(ltn.device)), dim=1)
             predictions = predictions_x + predictions_y
-            test_acc += torch.count_nonzero(torch.eq(addition_label.to(ltn.device), predictions))
+            test_acc += torch.count_nonzero(torch.eq(addition_label.to(ltn.device), predictions)) / predictions.shape[0]
         test_loss = test_loss / len(test_loader)
         test_sat = test_sat / len(test_loader)
         test_acc = test_acc / len(test_loader)
