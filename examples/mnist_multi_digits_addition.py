@@ -146,8 +146,6 @@ def main():
             predictions_y1 = np.argmax(predictions_y1, axis=1)
             predictions_y2 = np.argmax(predictions_y2, axis=1)
             predictions = 10 * predictions_x1 + predictions_x2 + 10 * predictions_y1 + predictions_y2
-            print("target", addition_label[:10])
-            print("prediction", predictions[:10])
             mean_accuracy += accuracy_score(addition_label, predictions)
             mean_sat += axioms(operand_images, addition_label).item()
 
