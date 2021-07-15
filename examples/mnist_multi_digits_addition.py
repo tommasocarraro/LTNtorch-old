@@ -146,6 +146,8 @@ def main():
             predictions_y1 = np.argmax(predictions_y1, axis=1)
             predictions_y2 = np.argmax(predictions_y2, axis=1)
             predictions = 10 * predictions_x1 + predictions_x2 + 10 * predictions_y1 + predictions_y2
+            print("target", addition_label[:10])
+            print("prediction", predictions[:10])
             mean_accuracy += accuracy_score(addition_label, predictions)
             mean_sat += axioms(operand_images, addition_label).item()
 
@@ -182,25 +184,6 @@ def main():
             optimizer.step()
             train_loss += loss.item()
         train_loss = train_loss / len(train_loader)
-        for batch_idx, (operand_images, addition_label) in enumerate(train_loader):
-            operand_images = operand_images[0]
-            addition_label = addition_label[0]
-            f = operand_images[0].unsqueeze_(1)
-            s = operand_images[1].unsqueeze_(1)
-            t = operand_images[2].unsqueeze_(1)
-            fo = operand_images[3].unsqueeze_(1)
-            f = logits_model(f.to(ltn.device))
-            s = logits_model(s.to(ltn.device))
-            t = logits_model(t.to(ltn.device))
-            fo = logits_model(fo.to(ltn.device))
-            print(f)
-            print(s)
-            print(t)
-            print(fo)
-            print(axioms(operand_images, addition_label))
-            print(f*10+s+t*10+fo)
-            print(addition_label)
-            break
 
         # we print metrics every epoch of training
         mean_accuracy_train, mean_sat_train = compute_metrics(train_loader)
