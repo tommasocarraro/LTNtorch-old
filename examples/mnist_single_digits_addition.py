@@ -6,7 +6,6 @@ import logging
 import torch
 import ltn
 import numpy as np
-from sklearn.metrics import accuracy_score
 from torch.nn.init import xavier_uniform_, normal_
 logging.basicConfig()
 logging.getLogger().setLevel(logging.DEBUG)
@@ -160,7 +159,7 @@ def main():
             predictions_x = torch.argmax(logits_model(operand_images[:, 0].to(ltn.device)), dim=1)
             predictions_y = torch.argmax(logits_model(operand_images[:, 1].to(ltn.device)), dim=1)
             predictions = predictions_x + predictions_y
-            train_acc += accuracy_score(addition_label, predictions)
+            train_acc += torch.eq(addition_label, predictions)
         train_loss = train_loss / len(train_loader)
         train_sat = train_sat / len(train_loader)
         train_acc = train_acc / len(train_loader)
@@ -175,7 +174,7 @@ def main():
             predictions_x = torch.argmax(logits_model(operand_images[:, 0].to(ltn.device)), dim=1)
             predictions_y = torch.argmax(logits_model(operand_images[:, 1].to(ltn.device)), dim=1)
             predictions = predictions_x + predictions_y
-            test_acc += accuracy_score(addition_label, predictions)
+            test_acc += torch.eq(addition_label, predictions)
         test_loss = test_loss / len(test_loader)
         test_sat = test_sat / len(test_loader)
         test_acc = test_acc / len(test_loader)
