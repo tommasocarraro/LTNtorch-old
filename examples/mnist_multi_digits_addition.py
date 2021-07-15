@@ -11,6 +11,7 @@ from torch.nn.init import xavier_uniform_, normal_
 logging.basicConfig()
 logging.getLogger().setLevel(logging.DEBUG)
 logger = logging.getLogger(__name__)
+# TODO capire come mai lo satisfaction level e' cosi basso ma apprendere benissimo le cose
 
 
 # this is a standard PyTorch DataLoader to load the dataset for the training and testing of the model
