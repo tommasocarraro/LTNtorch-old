@@ -174,7 +174,11 @@ def main():
             p = 4
         if epoch in range(18, 30):
             p = 6
-        train_loss = 0.0
+        train_loss, test_loss = 0.0, 0.0
+        train_sat, test_sat = 0.0, 0.0
+        train_acc, test_acc = 0.0, 0.0
+
+        # train step
         for batch_idx, (operand_images, addition_label) in enumerate(train_loader):
             optimizer.zero_grad()
             sat_agg = axioms(operand_images, addition_label, p_schedule=p)
@@ -182,15 +186,40 @@ def main():
             loss.backward()
             optimizer.step()
             train_loss += loss.item()
+            train_sat += sat_agg
+            # compute train accuracy
+            predictions_x1 = torch.argmax(logits_model(operand_images[:, 0].to(ltn.device)), dim=1)
+            predictions_x2 = torch.argmax(logits_model(operand_images[:, 1].to(ltn.device)), dim=1)
+            predictions_y1 = torch.argmax(logits_model(operand_images[:, 2].to(ltn.device)), dim=1)
+            predictions_y2 = torch.argmax(logits_model(operand_images[:, 3].to(ltn.device)), dim=1)
+            predictions = 10 * predictions_x1 + predictions_x2 + 10 * predictions_y1 + predictions_y2
+            train_acc += torch.count_nonzero(torch.eq(addition_label.to(ltn.device), predictions)) / predictions.shape[0]
         train_loss = train_loss / len(train_loader)
+        train_sat = train_sat / len(train_loader)
+        train_acc = train_acc / len(train_loader)
+
+        # test step
+        for batch_idx, (operand_images, addition_label) in enumerate(test_loader):
+            sat_agg = axioms(operand_images, addition_label, p_schedule=p)
+            loss = 1. - sat_agg
+            test_loss += loss.item()
+            test_sat += sat_agg
+            # compute train accuracy
+            predictions_x1 = torch.argmax(logits_model(operand_images[:, 0].to(ltn.device)), dim=1)
+            predictions_x2 = torch.argmax(logits_model(operand_images[:, 1].to(ltn.device)), dim=1)
+            predictions_y1 = torch.argmax(logits_model(operand_images[:, 2].to(ltn.device)), dim=1)
+            predictions_y2 = torch.argmax(logits_model(operand_images[:, 3].to(ltn.device)), dim=1)
+            predictions = 10 * predictions_x1 + predictions_x2 + 10 * predictions_y1 + predictions_y2
+            test_acc += torch.count_nonzero(torch.eq(addition_label.to(ltn.device), predictions)) / predictions.shape[0]
+        test_loss = test_loss / len(test_loader)
+        test_sat = test_sat / len(test_loader)
+        test_acc = test_acc / len(train_loader)
 
         # we print metrics every epoch of training
-        mean_accuracy_train, mean_sat_train = compute_metrics(train_loader)
-        mean_accuracy_test, mean_sat_test = compute_metrics(test_loader)
 
-        logger.info(" epoch %d | loss %.4f | Train Sat %.3f | Test Sat %.3f | Train Acc %.3f | Test Acc %.3f ",
-                    epoch, train_loss, mean_sat_train, mean_sat_test,
-                    mean_accuracy_train, mean_accuracy_test)
+        logger.info(" epoch %d | Train loss %.4f | Train Sat %.4f | Train Acc %.4f | Test loss %.4f | Test Sat %.4f |"
+                    " Test Acc %.4f ",
+                    epoch, train_loss, train_sat, train_acc, test_loss, test_sat, test_acc)
 
 
 if __name__ == "__main__":
