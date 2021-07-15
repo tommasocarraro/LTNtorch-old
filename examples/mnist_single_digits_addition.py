@@ -180,8 +180,6 @@ def main():
         test_acc = test_acc / len(test_loader)
 
         # we print metrics every epoch of training
-        #mean_accuracy_train, mean_sat_train = compute_metrics(train_loader)
-        #mean_accuracy_test, mean_sat_test = compute_metrics(test_loader)
 
         logger.info(" epoch %d | Train loss %.4f | Train Sat %.4f | Train Acc %.4f | Test loss %.4f | Test Sat %.4f |"
                     " Test Acc %.4f ",
