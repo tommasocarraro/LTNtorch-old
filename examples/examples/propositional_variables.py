@@ -87,8 +87,8 @@ def main():
     # notice that the torch.clamp() is performed before passing the propositional variables through the knowledge base.
     # this choice has been done because PyTorch does not allow to perform the clamp after the backward phase.
     # for this reason, after the last epoch, the propositional variables could have a value out of [0., 1.] since a
-    # backward phase has been performed. Therefore, in order to print the final output we need to clamp the propositional
-    # variables again.
+    # backward phase has been performed. Therefore, in order to print the final output we need to clamp the
+    # propositional variables again.
     a = torch.clamp(a, 0., 1.)
     a.free_variables = []
     b = torch.clamp(b, 0., 1.)
