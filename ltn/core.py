@@ -1,6 +1,7 @@
 import torch
 from torch import nn
 import numpy as np
+import warnings
 
 # TODO ricordarsi di mettere il seed per le cose random
 # TODO guardare le proposizioni nel tutorial
@@ -79,51 +80,27 @@ def variable(variable_name, individuals_seq):
 
     return var
 
-'''
-class PropositionalVariable(object):
-    # TODO capire come restringere il valore della variabile proposizionale tra 0 e 1, sembra che in PyTorch non si possa
-    """PropositionalVariable class for ltn.
 
-    An ltn propositional variable denotes a propositional logic variable grounded as a scalar in the Real field.
+def propositional_variable(truth_value, trainable=False):
+    """Returns a rank-0 Tensor with the given truth value, whose output has to be constrained in [0,1],
+    that can be used as a propositional variable in LTN formulas.
 
     Args:
-        propositional_var_name: string containing the name of the propositional variable.
-        truth_value: the value that becomes the grounding of the LTN propositional variable.
-        trainable: whether the LTN propositional variable is trainable or not. If False, the subgraph containing the
-        propositional variable will be excluded from the gradient computation. Defaults to False. If True, the
-        propositional variable is initialized using the truth_value parameter.
-    Attributes:
-        propositional_var_name: see propositional_var_name argument.
-        grounding: it is the grounding of the LTN propositional variable. Specifically, it is a torch.tensor containing
-        the truth value of the propositional variable. The grounding has a dynamically added attribute called
-        free_variables, which contains a list of strings of the labels of the free variables contained in the expression.
-        In the case of a propositional variable, free_variables is empty since a propositional variable does not
-        contain variables.
+        truth_value: A float in [0,1].
+        trainable: whether the LTN propositional variable is trainable or not. If False, the PyTorch subgraph containing
+        the propositional variable will be excluded from the gradient computation. If True, the propositional variable
+        is initialized using the truth_value parameter. Defaults to False.
     """
-    def __init__(self, propositional_var_name, truth_value, trainable=False):
-        truth_value = torch.tensor(truth_value, requires_grad=trainable)
-        assert len(truth_value.shape) == 1, "The truth value must be a scalar, not a vector, matrix or tensor."
-        assert (truth_value <= 1 and truth_value >= 0), "The truth value must be in [0., 1.]"
-
-        self.propositional_var_name = propositional_var_name
-        self.grounding = truth_value
-        self.grounding.free_variables = []
-
-    def __repr__(self):
-        return "PropositionalVariable(propositional_variable_name='" + self.propositional_var_name + \
-               "', grounding=" + repr(self.grounding) + ", grounding_free_variables=" + \
-               str(self.grounding.free_variables) + ")"
-
-    def get_grounding(self):
-        """
-        This function returns a deep copy of the grounding of the LTN propositional variable.
-        :return: deep copy of the LTN propositional variable grounding.
-        """
-        # here, a deep copy is needed because if it is not used cross_groundings_values() will modify the object instance
-        ret_grounding = copy.deepcopy(self.grounding)
-        ret_grounding.free_variables = self.grounding.free_variables
-        return ret_grounding
-'''
+    assert 0 <= truth_value <= 1, "The truth value of a propositional variable should be a float in [0,1]."
+    prop = torch.tensor(truth_value).float().to(ltn.device)
+    prop.requires_grad = trainable
+    prop.free_variables = []
+    if trainable:
+        warnings.warn("Attention! You have defined a trainable LTN propositional variable. Therefore, you should "
+                      "constraint its value in [0., 1.] during learning. LTNtorch does not do that automatically. "
+                      "It is possible to use torch.clamp() to do that. See the propositional_variables.py example to "
+                      "understand how this works.")
+    return prop
 
 
 def get_n_individuals_of_var(grounding, var):

@@ -1,4 +1,4 @@
-from ltn.core import variable, Predicate, constant, Function, WrapperConnective, diag, undiag, WrapperQuantifier
+from ltn.core import variable, Predicate, constant, Function, WrapperConnective, diag, undiag, WrapperQuantifier, propositional_variable
 import ltn.fuzzy_ops
 import ltn.utils
 import torch
