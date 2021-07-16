@@ -33,7 +33,8 @@ def constant(value, trainable=False):
         constant, `free_variables` will be empty since a constant does not have free variables.
     """
     # we ensure that the tensor will be a float tensor and not a double tensor
-    const = torch.tensor(value, requires_grad=trainable).float().to(ltn.device)
+    const = torch.tensor(value).float().to(ltn.device)
+    const.requires_grad = trainable
     const.free_variables = []
     return const
 

@@ -1,3 +1,7 @@
+"""
+Here, you can find the the smokes-friends-cancer example of the LTN paper. Please, carefully read the example on the
+paper before going through the PyTorch example.
+"""
 import torch
 import numpy as np
 import ltn
@@ -28,7 +32,7 @@ def main():
     # two people
     Cancer = ltn.Predicate(layers_size=(10, 16, 16, 1))
 
-    # these list represent the facts of the knowledge base
+    # these lists represent the facts of the knowledge base
     friends = [('a', 'b'), ('a', 'e'), ('a', 'f'), ('a', 'g'), ('b', 'c'), ('c', 'd'), ('e', 'f'), ('g', 'h'),
                ('i', 'j'), ('j', 'm'), ('k', 'l'), ('m', 'n')]
     smokes = ['a', 'e', 'f', 'g', 'j', 'n']
@@ -73,24 +77,31 @@ def main():
 
         # friendship is anti-reflexive
         axioms.append(Forall(p, Not(Friends([p, p])), p=5))
+
         # friendship is symmetric
         axioms.append(Forall([p, q], Implies(Friends([p, q]), Friends([q, p])), p=5))
+
         # everyone has a friend
         axioms.append(Forall(p, Exists(q, Friends([p, q]), p=p_exists)))
+
         # smoking propagates among friends
         axioms.append(Forall([p, q], Implies(And(Friends([p, q]), Smokes(p)), Smokes(q))))
+
         # smoking causes cancer + not smoking causes not cancer
         axioms.append(Forall(p, Implies(Smokes(p), Cancer(p))))
         axioms.append(Forall(p, Implies(Not(Smokes(p)), Not(Cancer(p)))))
+
         # computing sat_level
         axioms = torch.stack([torch.squeeze(ax) for ax in axioms])
         sat_level = formula_aggregator(axioms, dim=0)
         return sat_level
 
+    # this function returns the satisfaction level of the logical formula phi 1
     def phi1():
         p = ltn.variable("p", torch.stack(list(g.values())))
         return Forall(p, Implies(Cancer(p), Smokes(p)), p=5)
 
+    # this function returns the satisfaction level of the logical formula phi2
     def phi2():
         p = ltn.variable("p", torch.stack(list(g.values())))
         q = ltn.variable("q", torch.stack(list(g.values())))
@@ -98,13 +109,11 @@ def main():
 
     # # Training
 
-    print(g.values())
-    # TODO sistemare questo problema dovuto a PyTorch
+    # these are all the parameters that the optimizer has to learn
     params = list(Smokes.parameters()) + list(Friends.parameters()) + list(Cancer.parameters()) + list(g.values())
     optimizer = torch.optim.Adam(params, lr=0.001)
 
     for epoch in range(1000):
-        print(g['a'])
         if epoch <= 200:
             p_exists = 1
         else:
