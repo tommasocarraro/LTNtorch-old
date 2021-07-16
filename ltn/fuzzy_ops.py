@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 """
 This module of the LTN project contains the PyTorch implementation of some common fuzzy logic operators. Refer to the
 LTN paper for a detailed description of these operators (see the Appendix).
@@ -305,6 +306,30 @@ class Equiv:
 # AGGREGATORS FOR QUANTIFIERS - only the aggregators introduced in the LTN paper are implemented
 
 
+class AggregMin:
+    """
+    Implementation of the min aggregator operator.
+    """
+    def __call__(self, xs, dim=None, keepdim=False):
+        """
+        Method __call__ for the min aggregator operator. Notice the use of torch.where(). This has to be used
+        because the guarded quantification is implemented in PyTorch by putting NaN values where the grounding of the
+        formula does not satisfy the guarded condition. Therefore, if we aggregate on a tensor with NaN values, it is
+        highly probable that we will obtain NaN as the output of the aggregation. For this reason, the aggregation do
+        not have to consider the NaN values contained in the input tensor.
+        :param xs: the truth values (grounding of formula) for which the aggregation has to be computed;
+        :param dim: the axes on which the aggregation has to be performed;
+        :param keepdim: whether the output has to keep the same dimensions as the input after the aggregation.
+        :return: the result of the mean aggregation. The shape of the result depends on the variables that are used
+        in the quantification (namely, the dimensions across which the aggregation has been computed).
+        """
+        xs = torch.where(torch.eq(xs, np.nan), 1., xs.double())
+        out = torch.min(xs.float(), dim=dim, keepdim=keepdim)
+        if isinstance(out, tuple):
+            out = out[0]
+        return out
+
+
 class AggregMean:
     """
     Implementation of the mean aggregator operator.
@@ -402,7 +427,7 @@ class AggregPMeanError:
         p = self.p if p is None else p
         stable = self.stable if stable is None else stable
         if stable:
-            xs = pi_0(xs)
+            xs = pi_1(xs)
         xs = torch.pow(1. - xs, p)
         numerator = torch.nansum(xs, dim=dim, keepdim=keepdim)
         denominator = torch.sum(~torch.isnan(xs), dim=dim, keepdim=keepdim)

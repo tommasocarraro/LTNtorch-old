@@ -10,6 +10,7 @@ import ltn
 # TODO rivedere il discorso active_doms, perche' non mi piace
 # TODO sistemare il fatto che diag vuole una lista, mettere una tupla come su LTN
 # TODO mettere il .item() quando si calacolano le metriche per non avere problemi di memoria
+# TODO nei tutorial si parla di domains invece che groundings. Pensare se si puo' sistemare
 
 
 def constant(value, trainable=False):
