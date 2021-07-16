@@ -2,6 +2,7 @@ import torch
 from torch import nn
 import numpy as np
 import warnings
+import ltn
 
 # TODO ricordarsi di mettere il seed per le cose random -> questo spetta al programmatore
 # TODO vedere se mettere controlli sulle shape di input ai predicati, se matchano con la dim del primo strato
@@ -9,7 +10,6 @@ import warnings
 # TODO rivedere il discorso active_doms, perche' non mi piace
 # TODO sistemare il fatto che diag vuole una lista, mettere una tupla come su LTN
 # TODO mettere il .item() quando si calacolano le metriche per non avere problemi di memoria
-import ltn
 
 
 def constant(value, trainable=False):
