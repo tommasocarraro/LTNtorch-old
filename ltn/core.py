@@ -4,11 +4,9 @@ import numpy as np
 import warnings
 import ltn
 
-# TODO ricordarsi di mettere il seed per le cose random -> questo spetta al programmatore
 # TODO vedere se mettere controlli sulle shape di input ai predicati, se matchano con la dim del primo strato
-# TODO il fatto che cross_values restituisce una lista e' scomodo, vedere come fare perche' in certi casi risulta scomodo
 # TODO rivedere il discorso active_doms, perche' non mi piace
-# TODO sistemare il fatto che diag vuole una lista, mettere una tupla come su LTN
+# TODO sistemare il fatto che diag vuole una lista, mettere una tupla come su LTN (capire come fare)
 # TODO mettere il .item() quando si calacolano le metriche per non avere problemi di memoria
 # TODO nei tutorial si parla di domains invece che groundings. Pensare se si puo' sistemare
 
