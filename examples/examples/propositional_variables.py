@@ -38,12 +38,8 @@ def main():
         # for this reason, we need to clamp the value of the three propositional variables in [0, 1]. To do so, we use
         # torch.clamp().
         a = torch.clamp(a, 0., 1.)
-        a.free_variables = []  # since torch.clamp() returns a new tensor, the dynamic attribute free_variables will be
-        # removed by this operation. For this reason, we need to reassign it to the LTN propositional variables.
         b = torch.clamp(b, 0., 1.)
-        b.free_variables = []
         c = torch.clamp(c, 0., 1.)
-        c.free_variables = []
         axioms = [
             # [ (A and B and (forall x: P(x))) -> Not C ] and C
             And(
@@ -90,11 +86,8 @@ def main():
     # backward phase has been performed. Therefore, in order to print the final output we need to clamp the
     # propositional variables again.
     a = torch.clamp(a, 0., 1.)
-    a.free_variables = []
     b = torch.clamp(b, 0., 1.)
-    b.free_variables = []
     c = torch.clamp(c, 0., 1.)
-    c.free_variables = []
 
     # print the value of the propositional variables after the training
     print("a:", a.item())
