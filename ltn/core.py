@@ -5,10 +5,11 @@ import warnings
 import ltn
 
 # TODO vedere se mettere controlli sulle shape di input ai predicati, se matchano con la dim del primo strato
-# TODO rivedere il discorso active_doms, perche' non mi piace
+# TODO rivedere il discorso active_doms, perche' non mi piace (sistemato, in teoria)
 # TODO sistemare il fatto che diag vuole una lista, mettere una tupla come su LTN (capire come fare)
 # TODO mettere il .item() quando si calacolano le metriche per non avere problemi di memoria
 # TODO nei tutorial si parla di domains invece che groundings. Pensare se si puo' sistemare
+# TODO provare a usare il lambda layer per implementare le variabili proposizionali, con lambda_func che fa il clamp
 
 
 def constant(value, trainable=False):
@@ -25,7 +26,7 @@ def constant(value, trainable=False):
         Defaults to False.
     Returns:
         a `torch.FloatTensor` representing the LTN constant.
-        A dynamic attribute `free_variables` is added to the tensor. In LTN, this attribute contains the labels of the
+        Removed: A dynamic attribute `free_variables` is added to the tensor. In LTN, this attribute contains the labels of the
         free variables that appear on a constant, variable, formula, etc. `free_variables` is usually a list of labels
         that associates each variable to one of the axes of the grounding of a formula. Since in this case we have a
         constant, `free_variables` will be empty since a constant does not have free variables.
@@ -33,7 +34,6 @@ def constant(value, trainable=False):
     # we ensure that the tensor will be a float tensor and not a double tensor
     const = torch.tensor(value).float().to(ltn.device)
     const.requires_grad = trainable
-    const.free_variables = []
     return const
 
 
@@ -91,7 +91,6 @@ def propositional_variable(truth_value, trainable=False):
     assert 0 <= truth_value <= 1, "The truth value of a propositional variable should be a float in [0,1]."
     prop = torch.tensor(truth_value).float().to(ltn.device)
     prop.requires_grad = trainable
-    prop.free_variables = []
     if trainable:
         warnings.warn("Attention! You have defined a trainable LTN propositional variable. Therefore, you should "
                       "constraint its value in [0., 1.] during learning. LTNtorch does not do that automatically. "
@@ -132,13 +131,14 @@ def cross_grounding_values(input_groundings, flat_batch_dim=False):
     """
     vars_to_n_individuals = {}
     for grounding in input_groundings:
-        for var in grounding.free_variables:
-            vars_to_n_individuals[var] = get_n_individuals_of_var(grounding, var)
+        if hasattr(grounding, "free_variables"):
+            for var in grounding.free_variables:
+                vars_to_n_individuals[var] = get_n_individuals_of_var(grounding, var)
     vars = list(vars_to_n_individuals.keys())
     n_individuals_per_var = list(vars_to_n_individuals.values())
     crossed_groundings = []
     for grounding in input_groundings:
-        vars_in_grounding = list(grounding.free_variables)
+        vars_in_grounding = list(grounding.free_variables) if hasattr(grounding, "free_variables") else []
         vars_not_in_grounding = list(set(vars).difference(vars_in_grounding))
         for new_var in vars_not_in_grounding:
             new_idx = len(vars_in_grounding)
