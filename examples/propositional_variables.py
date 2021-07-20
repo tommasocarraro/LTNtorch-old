@@ -37,9 +37,9 @@ def main():
         # range [0, 1] since PyTorch does not allow to automatically constraint the value of a tensor in a range.
         # for this reason, we need to clamp the value of the three propositional variables in [0, 1]. To do so, we use
         # torch.clamp().
-        a = torch.clamp(a, 0., 1.)
-        b = torch.clamp(b, 0., 1.)
-        c = torch.clamp(c, 0., 1.)
+        #a = torch.clamp(a, 0., 1.)
+        #b = torch.clamp(b, 0., 1.)
+        #c = torch.clamp(c, 0., 1.)
         axioms = [
             # [ (A and B and (forall x: P(x))) -> Not C ] and C
             And(
@@ -75,6 +75,7 @@ def main():
         loss = 1. - sat_agg[0]
         loss.backward()
         optimizer.step()
+        ltn.post_step(params)
 
         if epoch % 100 == 0:
             print("Epoch %d: Sat Level %.3f" % (epoch, sat_agg[0]))
@@ -85,9 +86,9 @@ def main():
     # for this reason, after the last epoch, the propositional variables could have a value out of [0., 1.] since a
     # backward phase has been performed. Therefore, in order to print the final output we need to clamp the
     # propositional variables again.
-    a = torch.clamp(a, 0., 1.)
-    b = torch.clamp(b, 0., 1.)
-    c = torch.clamp(c, 0., 1.)
+    #a = torch.clamp(a, 0., 1.)
+    #b = torch.clamp(b, 0., 1.)
+    #c = torch.clamp(c, 0., 1.)
 
     # print the value of the propositional variables after the training
     print("a:", a.item())

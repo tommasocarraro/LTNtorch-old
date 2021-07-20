@@ -99,6 +99,11 @@ def propositional_variable(truth_value, trainable=False):
     return prop
 
 
+def post_step(params):
+    for prop in params:
+        prop.clamp_(0., 1.)
+
+
 def get_n_individuals_of_var(grounding, var):
     """Returns the number of individuals of the variable var contained in the grounding given in input.
     Here, var is needed to specify the axis of the variable in the input grounding (tensor).
