@@ -4,12 +4,41 @@ import pandas as pd
 from scipy.sparse import csr_matrix
 import ltn
 import logging
+import bottleneck as bn
 logging.basicConfig()
 logging.getLogger().setLevel(logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 # TODO risolvere il problema della incompatibilita' tra matrici sparse e PyTorch
 # TODO vedere come tenere la matrice sparsa e poi costruirsi a batch il tensor normale
+
+
+def ndcg_at_k(pred_scores, ground_truth, k=100):
+    assert pred_scores.shape == ground_truth.shape, \
+        "'pred_scores' and 'ground_truth' must have the same shape."
+    k = min(pred_scores.shape[1], k)
+    n_users = pred_scores.shape[0]
+    idx_topk_part = bn.argpartition(-pred_scores, k - 1, axis=1)
+    topk_part = pred_scores[np.arange(n_users)[:, np.newaxis], idx_topk_part[:, :k]]
+    idx_part = np.argsort(-topk_part, axis=1)
+    idx_topk = idx_topk_part[np.arange(n_users)[:, np.newaxis], idx_part]
+    tp = 1. / np.log2(np.arange(2, k + 2))
+    DCG = (ground_truth[np.arange(n_users)[:, np.newaxis], idx_topk] * tp).sum(axis=1)
+    IDCG = np.array([(tp[:min(int(n), k)]).sum() for n in ground_truth.sum(axis=1)])
+    return DCG / IDCG
+
+
+def recall_at_k(pred_scores, ground_truth, k=100):
+    assert pred_scores.shape == ground_truth.shape, \
+        "'pred_scores' and 'ground_truth' must have the same shape."
+    k = min(pred_scores.shape[1], k)
+    idx = bn.argpartition(-pred_scores, k - 1, axis=1)
+    pred_scores_binary = np.zeros_like(pred_scores, dtype=bool)
+    pred_scores_binary[np.arange(pred_scores.shape[0])[:, np.newaxis], idx[:, :k]] = True
+    X_true_binary = (ground_truth > 0)
+    num = (np.logical_and(X_true_binary, pred_scores_binary).sum(axis=1)).astype(np.float32)
+    recall = num / np.minimum(k, X_true_binary.sum(axis=1))
+    return recall
 
 
 def prepare_dataset():
@@ -276,6 +305,12 @@ def main():
             sat_agg = axioms(positive_pairs, negative_pairs, batch_users, batch_items)
             #mean_sat_single_formulas_test += axioms_list
             mean_sat_test += sat_agg.item()
+            print("positive")
+            for i in positive_pairs:
+                print(likes([get_u_features(i[0]), get_i_features(i[1])]))
+            print("negative")
+            for i in negative_pairs:
+                print(likes([get_u_features(i[0]), get_i_features(i[1])]))
         mean_sat_test = mean_sat_test / len(test_loader)
         #mean_sat_single_formulas_test = mean_sat_single_formulas_test / len(test_loader)
 
