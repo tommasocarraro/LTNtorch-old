@@ -153,7 +153,7 @@ def main():
     ratings, u_i_matrix, items, users = prepare_dataset()
 
     # create DataLoader for the training of the model
-    train_loader = DataLoader(ratings, 512, True)
+    train_loader = DataLoader(ratings, 256, True)
 
     # convert dataset to tensors to properly work with LTN
     u_i_matrix = torch.tensor(u_i_matrix.todense()).to(ltn.device)  # this problem has to be solved, for the moment it could work since
@@ -220,6 +220,7 @@ def main():
             optimizer.zero_grad()
             sat_agg, axioms_list = axioms(positive_pairs, negative_pairs, batch_users, batch_items)
             mean_sat_single_formulas += axioms_list
+            print(mean_sat_single_formulas)
             mean_sat += sat_agg.item()
             loss = 1. - sat_agg
             loss.backward()
@@ -227,10 +228,10 @@ def main():
             train_loss += loss.item()
         train_loss = train_loss / len(train_loader)
         mean_sat = mean_sat / len(train_loader)
-        mean_sat_single_formulas / len(train_loader)
+        mean_sat_single_formulas = mean_sat_single_formulas / len(train_loader)
 
         # we print metrics every epoch of training
-        logger.info(" epoch %d | loss %.4f | Train Sat %.3f | Formulas Sat %.3f ", epoch, train_loss, mean_sat,
+        logger.info(" epoch %d | loss %.4f | Train Sat %.3f | Formulas Sat ", epoch, train_loss, mean_sat,
                     mean_sat_single_formulas)
 
 
