@@ -103,15 +103,19 @@ class Likes(torch.nn.Module):
         super(Likes, self).__init__()
         self.elu = torch.nn.ELU()
         self.sigmoid = torch.nn.Sigmoid()
-        self.first_layer = torch.nn.Linear(54, 32)
-        self.second_layer = torch.nn.Linear(32, 16)
-        self.third_layer = torch.nn.Linear(16, 1)
+        self.first_layer = torch.nn.Linear(54, 128)
+        self.second_layer = torch.nn.Linear(128, 64)
+        self.third_layer = torch.nn.Linear(64, 32)
+        self.fourth_layer = torch.nn.Linear(32, 16)
+        self.fifth_layer = torch.nn.Linear(16, 1)
 
     def forward(self, inputs):
         x = torch.cat(inputs, dim=1)
         x = self.elu(self.first_layer(x))
         x = self.elu(self.second_layer(x))
-        return self.sigmoid(self.third_layer(x))
+        x = self.elu(self.third_layer(x))
+        x = self.elu(self.fourth_layer(x))
+        return self.sigmoid(self.fifth_layer(x))
 
 
 # this is a standard PyTorch DataLoader to load the dataset for the training and testing of the model
