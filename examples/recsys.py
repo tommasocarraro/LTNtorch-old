@@ -230,7 +230,7 @@ def main():
         mean_sat_single_formulas = mean_sat_single_formulas / len(train_loader)
 
         # we print metrics every epoch of training
-        logger.info(" epoch %d | loss %.4f | Train Sat %.3f | Formulas Sat ", epoch, train_loss, mean_sat,
+        logger.info(" epoch %d | loss %.4f | Train Sat %.3f | Formulas Sat %s ", epoch, train_loss, mean_sat,
                     mean_sat_single_formulas)
 
 
