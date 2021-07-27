@@ -103,8 +103,8 @@ class Likes(torch.nn.Module):
         super(Likes, self).__init__()
         self.elu = torch.nn.ELU()
         self.sigmoid = torch.nn.Sigmoid()
-        self.first_layer = torch.nn.Linear(54, 16)
-        self.second_layer = torch.nn.Linear(16, 16)
+        self.first_layer = torch.nn.Linear(54, 32)
+        self.second_layer = torch.nn.Linear(32, 16)
         self.third_layer = torch.nn.Linear(16, 1)
 
     def forward(self, inputs):
@@ -210,7 +210,7 @@ def main():
         return sat_level, np.array([f1.item(), f2.item(), f3.item()])
 
     # training of the LTN model for recommendation
-    optimizer = torch.optim.Adam(likes.parameters(), lr=0.1)
+    optimizer = torch.optim.Adam(likes.parameters(), lr=0.01)
 
     for epoch in range(100):
         train_loss = 0.0
