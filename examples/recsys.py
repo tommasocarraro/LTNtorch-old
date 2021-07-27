@@ -44,14 +44,18 @@ def prepare_dataset():
     for _, group in g:
         group_pos = group[group['rating'] == 1]
         group_neg = group[group['rating'] == 0]
-        n_rating_remove_pos = np.round(len(group_pos) * 10 / 100)
-        n_rating_remove_neg = np.round(len(group_neg) * 10 / 100)
+        n_rating_remove_pos = np.round(len(group_pos) * 20 / 100)
+        n_rating_remove_neg = np.round(len(group_neg) * 20 / 100)
         ratings_to_remove = group_pos.sample(n=int(n_rating_remove_pos))
         ratings_test = ratings_test.append(ratings_to_remove)
         ratings = ratings.drop(ratings_to_remove.index)
         ratings_to_remove = group_neg.sample(n=int(n_rating_remove_neg))
         ratings_test = ratings_test.append(ratings_to_remove)
         ratings = ratings.drop(ratings_to_remove.index)
+
+    ratings = ratings.reset_index(drop=True)
+    ratings_test = ratings_test.sample(frac=1)
+    ratings_test = ratings_test.reset_index(drop=True)
 
     # build sparse user-item matrix, the sparse matrix has a 1 if user has interacted with the item, 0 otherwise
     # even if the user has rated badly an item, there will be a 1 in the sparse matrix for that user-item pair
@@ -105,6 +109,10 @@ def prepare_dataset():
     users_info = users_info.join(one_hot)
     # remove 'user' column
     users_info = users_info.drop(columns=['user', 'zip'])
+
+    print(ratings)
+    print(ratings_test)
+    np.d()
 
     return ratings.to_numpy(), ratings_test.to_numpy(), user_item_matrix, items_info.to_numpy(), users_info.to_numpy()
 
