@@ -110,7 +110,7 @@ def prepare_dataset():
     # remove 'user' column
     users_info = users_info.drop(columns=['user', 'zip'])
 
-    return ratings.to_numpy(), ratings_test.to_numpy(), user_item_matrix, items_info.to_numpy(), users_info.to_numpy()
+    return ratings.to_numpy(), ratings_test.to_numpy().astype(np.int64), user_item_matrix, items_info.to_numpy(), users_info.to_numpy()
 
 
 class Likes(torch.nn.Module):
