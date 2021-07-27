@@ -37,7 +37,7 @@ def constant(value, trainable=False):
     return const
 
 
-def variable(variable_name, individuals_seq):
+def variable(variable_name, individuals_seq, add_batch_dim=True):
     """Function that creates an LTN variable.
 
     An LTN variable denotes a sequence of individuals. It is grounded as a sequence of tensors (groundings of
@@ -51,6 +51,12 @@ def variable(variable_name, individuals_seq):
         individuals_seq: it is a list of individuals that becomes the grounding the LTN variable. Notice that each
         individual in the sequence must have the same shape (i.e., must be of the same domain). Alternatively, it is
         possible to directly give a `torch.tensor`, which becomes the grounding of the variable.
+        add_batch_dim: this is a boolean flag indicating whether the batch dimension has to be added to the variable or
+        not. Since a variable represents a sequence of individuals, the batch dimension should be added if it is missed.
+        Note that the batch dimension is added if and only if the input sequence has one single dimension. If, instead,
+        the input sequence has more than one dimension, the first dimension is considered as batch dimension. The
+        default value of this parameter is True. If this value is set to False and the input sequence has only one
+        dimension, no batch dimension will be added. This could serve in rare cases.
     Returns:
         a `torch.FloatTensor` representing the LTN variable, where axis 0 is related with the number of individuals in
         the grounding of the variable. Like for the LTN constants, the dynamic attribute `free_variables` is added to
@@ -64,9 +70,12 @@ def variable(variable_name, individuals_seq):
         var = individuals_seq.float().to(ltn.device)
     else:
         # we ensure that the tensor will be a float tensor and not a double tensor
-        var = torch.tensor(individuals_seq).float().to(ltn.device)
+        var = torch.tensor(individuals_seq)
+        if isinstance(var, torch.DoubleTensor):
+            var = var.float()
+        var = var.to(ltn.device)
 
-    if len(var.shape) == 1:
+    if len(var.shape) == 1 and add_batch_dim:
         # adds a dimension to transform the input in the correct shape to work with LTN
         # it transforms the input into a sequence of individuals in the case it is not a proper sequence
         # for example, [3, 1, 2] is transformed into [[3], [1], [2]]
@@ -254,6 +263,7 @@ class Predicate(nn.Module):
         if self.model_type == 'model' or self.model_type == 'lambda':
             # the management of the input is left to the model or the lambda function
             outputs = self.model(inputs, *args, **kwargs)
+
         if self.model_type == 'mlp':
             # if the model is an mlp directly instantiated by LTN, it is necessary to flat the input
             flat_inputs = [torch.flatten(x, start_dim=1) for x in inputs]  # if len(x.shape) > 1 else x
