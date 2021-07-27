@@ -103,19 +103,15 @@ class Likes(torch.nn.Module):
         super(Likes, self).__init__()
         self.elu = torch.nn.ELU()
         self.sigmoid = torch.nn.Sigmoid()
-        self.first_layer = torch.nn.Linear(54, 128)
-        self.second_layer = torch.nn.Linear(128, 64)
-        self.third_layer = torch.nn.Linear(64, 32)
-        self.fourth_layer = torch.nn.Linear(32, 16)
-        self.fifth_layer = torch.nn.Linear(16, 1)
+        self.first_layer = torch.nn.Linear(54, 16)
+        self.second_layer = torch.nn.Linear(16, 16)
+        self.third_layer = torch.nn.Linear(16, 1)
 
     def forward(self, inputs):
         x = torch.cat(inputs, dim=1)
         x = self.elu(self.first_layer(x))
         x = self.elu(self.second_layer(x))
-        x = self.elu(self.third_layer(x))
-        x = self.elu(self.fourth_layer(x))
-        return self.sigmoid(self.fifth_layer(x))
+        return self.sigmoid(self.third_layer(x))
 
 
 # this is a standard PyTorch DataLoader to load the dataset for the training and testing of the model
@@ -157,7 +153,7 @@ def main():
     ratings, u_i_matrix, items, users = prepare_dataset()
 
     # create DataLoader for the training of the model
-    train_loader = DataLoader(ratings, 256, True)
+    train_loader = DataLoader(ratings, 1024, True)
 
     # convert dataset to tensors to properly work with LTN
     u_i_matrix = torch.tensor(u_i_matrix.todense()).to(ltn.device)  # this problem has to be solved, for the moment it could work since
@@ -197,32 +193,33 @@ def main():
         u_neg = ltn.variable('u_neg', negative_pairs[:, 0], add_batch_dim=False)
         i_neg = ltn.variable('i_neg', negative_pairs[:, 1], add_batch_dim=False)
 
-        axioms = [
-            Forall(ltn.diag([u_pos, i_pos]), likes([get_u_features(u_pos), get_i_features(i_pos)])),
-            Forall(ltn.diag([u_neg, i_neg]), Not(likes([get_u_features(u_neg), get_i_features(i_neg)]))),
-            Forall([u1, u2, i], Implies(
+        f1 = Forall(ltn.diag([u_pos, i_pos]), likes([get_u_features(u_pos), get_i_features(i_pos)]))
+        f2 = Forall(ltn.diag([u_neg, i_neg]), Not(likes([get_u_features(u_neg), get_i_features(i_neg)])))
+        f3 = Forall([u1, u2, i], Implies(
                                         And(
                                             sim([get_u_ratings(u1), get_u_ratings(u2)]),
                                             likes([get_u_features(u1), get_i_features(i)])
                                         ),
                                         likes([get_u_features(u2), get_i_features(i)])
                                         ))
-        ]
 
-        axioms = torch.stack(axioms)
+        axioms = torch.stack([f1, f2, f3])
 
         sat_level = formula_aggregator(axioms, dim=0)
-        return sat_level
+
+        return sat_level, np.array([f1.item(), f2.item(), f3.item()])
 
     # training of the LTN model for recommendation
-    optimizer = torch.optim.Adam(likes.parameters(), lr=0.01)
+    optimizer = torch.optim.Adam(likes.parameters(), lr=0.1)
 
     for epoch in range(100):
         train_loss = 0.0
         mean_sat = 0.0
+        mean_sat_single_formulas = np.array([0., 0., 0.])
         for batch_idx, (positive_pairs, negative_pairs, batch_users, batch_items) in enumerate(train_loader):
             optimizer.zero_grad()
-            sat_agg = axioms(positive_pairs, negative_pairs, batch_users, batch_items)
+            sat_agg, axioms_list = axioms(positive_pairs, negative_pairs, batch_users, batch_items)
+            mean_sat_single_formulas += axioms_list
             mean_sat += sat_agg.item()
             loss = 1. - sat_agg
             loss.backward()
@@ -230,9 +227,11 @@ def main():
             train_loss += loss.item()
         train_loss = train_loss / len(train_loader)
         mean_sat = mean_sat / len(train_loader)
+        mean_sat_single_formulas / len(train_loader)
 
         # we print metrics every epoch of training
-        logger.info(" epoch %d | loss %.4f | Train Sat %.3f ", epoch, train_loss, mean_sat)
+        logger.info(" epoch %d | loss %.4f | Train Sat %.3f | Formulas Sat %.3f ", epoch, train_loss, mean_sat,
+                    mean_sat_single_formulas)
 
 
 
