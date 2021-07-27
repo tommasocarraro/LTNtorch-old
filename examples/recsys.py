@@ -110,10 +110,6 @@ def prepare_dataset():
     # remove 'user' column
     users_info = users_info.drop(columns=['user', 'zip'])
 
-    print(ratings)
-    print(ratings_test)
-    np.d()
-
     return ratings.to_numpy(), ratings_test.to_numpy(), user_item_matrix, items_info.to_numpy(), users_info.to_numpy()
 
 
