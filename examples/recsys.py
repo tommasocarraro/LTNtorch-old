@@ -215,7 +215,7 @@ def main():
         return sat_level
 
     # training of the LTN model for recommendation
-    optimizer = torch.optim.Adam(likes.parameters(), lr=0.001)
+    optimizer = torch.optim.Adam(likes.parameters(), lr=0.01)
 
     for epoch in range(100):
         train_loss = 0.0
