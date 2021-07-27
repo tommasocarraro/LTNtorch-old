@@ -37,6 +37,17 @@ def prepare_dataset():
     ratings['rating'][ratings['rating'] < 4] = 0
     ratings['rating'][ratings['rating'] >= 4] = 1
 
+    # create test_set
+    # 20% of positive ratings are put in test set
+    g = ratings.groupby('user')
+    ratings_test = pd.DataFrame(columns=['user', 'item', 'rating'])
+    for _, group in g:
+        group = group[group['rating'] == 1]
+        n_ratings_to_remove = np.round(len(group) * 20 / 100)
+        ratings_to_remove = group.sample(n=int(n_ratings_to_remove))
+        ratings_test = ratings_test.append(ratings_to_remove)
+        ratings = ratings.drop(ratings_to_remove.index)
+
     # build sparse user-item matrix, the sparse matrix has a 1 if user has interacted with the item, 0 otherwise
     # even if the user has rated badly an item, there will be a 1 in the sparse matrix for that user-item pair
     g = ratings.groupby('user')
@@ -50,6 +61,7 @@ def prepare_dataset():
         rows.extend(list(group['user']))
 
     values = np.ones(len(rows))
+    # the user-item matrix does not contain test interactions
     user_item_matrix = csr_matrix((values, (rows, cols)), (n_users, n_items))
 
     # pre-processing items
@@ -89,7 +101,7 @@ def prepare_dataset():
     # remove 'user' column
     users_info = users_info.drop(columns=['user', 'zip'])
 
-    return ratings.to_numpy(), user_item_matrix, items_info.to_numpy(), users_info.to_numpy()
+    return ratings, ratings_test, user_item_matrix, items_info.to_numpy(), users_info.to_numpy()
 
 
 class Likes(torch.nn.Module):
@@ -150,10 +162,11 @@ class DataLoader(object):
 
 def main():
     # prepare dataset for recommendation
-    ratings, u_i_matrix, items, users = prepare_dataset()
+    ratings, ratings_test, u_i_matrix, items, users = prepare_dataset()
 
-    # create DataLoader for the training of the model
+    # create DataLoader for the training and testing of the model
     train_loader = DataLoader(ratings, 256, True)
+    test_loader = DataLoader(ratings_test, 256)
 
     # convert dataset to tensors to properly work with LTN
     u_i_matrix = torch.tensor(u_i_matrix.todense()).to(ltn.device)  # this problem has to be solved, for the moment it could work since
@@ -244,9 +257,24 @@ def main():
         mean_sat = mean_sat / len(train_loader)
         mean_sat_single_formulas = mean_sat_single_formulas / len(train_loader)
 
+        # test step
+        mean_sat_test = 0.0
+        mean_sat_single_formulas_test = np.array([0., 0., 0., 0., 0.])
+        for batch_idx, (positive_pairs, negative_pairs, batch_users, batch_items) in enumerate(test_loader):
+            optimizer.zero_grad()
+            sat_agg, axioms_list = axioms(positive_pairs, negative_pairs, batch_users, batch_items)
+            mean_sat_single_formulas_test += axioms_list
+            mean_sat_test += sat_agg.item()
+            loss = 1. - sat_agg
+            loss.backward()
+            optimizer.step()
+            train_loss += loss.item()
+        mean_sat_test = mean_sat_test / len(test_loader)
+        mean_sat_single_formulas_test = mean_sat_single_formulas_test / len(test_loader)
+
         # we print metrics every epoch of training
-        logger.info(" epoch %d | loss %.4f | Train Sat %.3f | Formulas Sat %s ", epoch, train_loss, mean_sat,
-                    mean_sat_single_formulas)
+        logger.info(" epoch %d | loss %.4f | Train Sat %.3f | Formulas Sat Train %s | Test Sat %.3f | Formulas Sat Test %s ",
+                    epoch, train_loss, mean_sat, mean_sat_single_formulas, mean_sat_test, mean_sat_single_formulas_test)
 
 
 
