@@ -187,7 +187,8 @@ def main():
     def axioms(positive_pairs, negative_pairs, batch_users, batch_items):
         u1 = ltn.variable('u1', batch_users, add_batch_dim=False)
         u2 = ltn.variable('u2', batch_users, add_batch_dim=False)
-        i = ltn.variable('i', batch_items, add_batch_dim=False)
+        i1 = ltn.variable('i1', batch_items, add_batch_dim=False)
+        i2 = ltn.variable('i2', batch_items, add_batch_dim=False)
         u_pos = ltn.variable('u_pos', positive_pairs[:, 0], add_batch_dim=False)
         i_pos = ltn.variable('i_pos', positive_pairs[:, 1], add_batch_dim=False)
         u_neg = ltn.variable('u_neg', negative_pairs[:, 0], add_batch_dim=False)
@@ -195,19 +196,33 @@ def main():
 
         f1 = Forall(ltn.diag([u_pos, i_pos]), likes([get_u_features(u_pos), get_i_features(i_pos)]))
         f2 = Forall(ltn.diag([u_neg, i_neg]), Not(likes([get_u_features(u_neg), get_i_features(i_neg)])))
-        f3 = Forall([u1, u2, i], Implies(
+        f3 = Forall([u1, u2, i1], Implies(
                                         And(
                                             sim([get_u_ratings(u1), get_u_ratings(u2)]),
-                                            likes([get_u_features(u1), get_i_features(i)])
+                                            likes([get_u_features(u1), get_i_features(i1)])
                                         ),
-                                        likes([get_u_features(u2), get_i_features(i)])
+                                        likes([get_u_features(u2), get_i_features(i1)])
                                         ))
+        f4 = Forall([u1, u2, i1], Implies(
+            And(
+                sim([get_u_features(u1), get_u_features(u2)]),
+                likes([get_u_features(u1), get_i_features(i1)])
+            ),
+            likes([get_u_features(u2), get_i_features(i1)])
+        ))
+        f5 = Forall([i1, i2, u1], Implies(
+            And(
+                sim([get_i_features(i1), get_i_features(i2)]),
+                likes([get_u_features(u1), get_i_features(i1)])
+            ),
+            likes([get_u_features(u1), get_i_features(i2)])
+        ))
 
-        axioms = torch.stack([f1, f2, f3])
+        axioms = torch.stack([f1, f2, f3, f4, f5])
 
         sat_level = formula_aggregator(axioms, dim=0)
 
-        return sat_level, np.array([f1.item(), f2.item(), f3.item()])
+        return sat_level, np.array([f1.item(), f2.item(), f3.item(), f4.item(), f5.item()])
 
     # training of the LTN model for recommendation
     optimizer = torch.optim.Adam(likes.parameters(), lr=0.01)
@@ -215,7 +230,7 @@ def main():
     for epoch in range(100):
         train_loss = 0.0
         mean_sat = 0.0
-        mean_sat_single_formulas = np.array([0., 0., 0.])
+        mean_sat_single_formulas = np.array([0., 0., 0., 0., 0.])
         for batch_idx, (positive_pairs, negative_pairs, batch_users, batch_items) in enumerate(train_loader):
             optimizer.zero_grad()
             sat_agg, axioms_list = axioms(positive_pairs, negative_pairs, batch_users, batch_items)
