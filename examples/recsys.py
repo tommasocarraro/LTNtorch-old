@@ -288,8 +288,8 @@ def main():
         '''logger.info(" epoch %d | loss %.4f | Train Sat %.3f | Formulas Sat Train %s | Test Sat %.3f | Formulas Sat Test %s ",
                     epoch, train_loss, mean_sat, mean_sat_single_formulas, mean_sat_test, mean_sat_single_formulas_test)'''
         logger.info(
-            " epoch %d | loss %.4f | Train Sat %.3f | Formulas Sat Train %s ",
-            epoch, train_loss, mean_sat, mean_sat_single_formulas)
+            " epoch %d | loss %.4f | Train Sat %.3f | Mean Sat Test %s ",
+            epoch, train_loss, mean_sat, mean_sat_test)
 
 
 if __name__ == "__main__":
