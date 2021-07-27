@@ -44,11 +44,12 @@ def prepare_dataset():
     for _, group in g:
         group_pos = group[group['rating'] == 1]
         group_neg = group[group['rating'] == 0]
-        n_ratings_to_remove = np.round(len(group) * 10 / 100)
-        ratings_to_remove = group_pos.sample(n=int(n_ratings_to_remove))
+        n_rating_remove_pos = np.round(len(group_pos) * 10 / 100)
+        n_rating_remove_neg = np.round(len(group_neg) * 10 / 100)
+        ratings_to_remove = group_pos.sample(n=int(n_rating_remove_pos))
         ratings_test = ratings_test.append(ratings_to_remove)
         ratings = ratings.drop(ratings_to_remove.index)
-        ratings_to_remove = group_neg.sample(n=int(n_ratings_to_remove))
+        ratings_to_remove = group_neg.sample(n=int(n_rating_remove_neg))
         ratings_test = ratings_test.append(ratings_to_remove)
         ratings = ratings.drop(ratings_to_remove.index)
 
