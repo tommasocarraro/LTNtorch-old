@@ -299,27 +299,32 @@ def main():
 
         # test step
         mean_sat_test = 0.0
+        pos_mean = 0.0
+        neg_mean = 0.0
         mean_sat_single_formulas_test = np.array([0., 0., 0., 0., 0.])
         for batch_idx, (positive_pairs, negative_pairs, batch_users, batch_items) in enumerate(test_loader):
             #sat_agg, axioms_list = axioms(positive_pairs, negative_pairs, batch_users, batch_items)
             sat_agg = axioms(positive_pairs, negative_pairs, batch_users, batch_items)
             #mean_sat_single_formulas_test += axioms_list
             mean_sat_test += sat_agg.item()
-            print("positive")
-            for i in positive_pairs:
-                print(likes([get_u_features(torch.tensor(i[0])), get_i_features(torch.tensor(i[1]))]))
-            print("negative")
-            for i in negative_pairs:
-                print(likes([get_u_features(torch.tensor(i[0])), get_i_features(torch.tensor(i[1]))]))
+            u_pos = ltn.variable('u_pos', positive_pairs[:, 0], add_batch_dim=False)
+            i_pos = ltn.variable('i_pos', positive_pairs[:, 1], add_batch_dim=False)
+            u_neg = ltn.variable('u_neg', negative_pairs[:, 0], add_batch_dim=False)
+            i_neg = ltn.variable('i_neg', negative_pairs[:, 1], add_batch_dim=False)
+            pos_mean += torch.mean(likes([get_u_features(u_pos), get_i_features(i_pos)]))
+            neg_mean += torch.mean(likes([get_u_features(u_neg), get_i_features(i_neg)]))
+
         mean_sat_test = mean_sat_test / len(test_loader)
+        pos_mean = pos_mean / len(test_loader)
+        neg_mean = neg_mean / len(test_loader)
         #mean_sat_single_formulas_test = mean_sat_single_formulas_test / len(test_loader)
 
         # we print metrics every epoch of training
         '''logger.info(" epoch %d | loss %.4f | Train Sat %.3f | Formulas Sat Train %s | Test Sat %.3f | Formulas Sat Test %s ",
                     epoch, train_loss, mean_sat, mean_sat_single_formulas, mean_sat_test, mean_sat_single_formulas_test)'''
         logger.info(
-            " epoch %d | loss %.4f | Train Sat %.3f | Mean Sat Test %s ",
-            epoch, train_loss, mean_sat, mean_sat_test)
+            " epoch %d | loss %.4f | Train Sat %.3f | Mean Sat Test %s | Mean pos test %.3f | Mean neg test %.3f ",
+            epoch, train_loss, mean_sat, mean_sat_test, pos_mean, neg_mean)
 
 
 if __name__ == "__main__":
