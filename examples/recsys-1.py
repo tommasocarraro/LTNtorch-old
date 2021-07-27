@@ -13,34 +13,6 @@ logger = logging.getLogger(__name__)
 # TODO vedere come tenere la matrice sparsa e poi costruirsi a batch il tensor normale
 
 
-def ndcg_at_k(pred_scores, ground_truth, k=100):
-    assert pred_scores.shape == ground_truth.shape, \
-        "'pred_scores' and 'ground_truth' must have the same shape."
-    k = min(pred_scores.shape[1], k)
-    n_users = pred_scores.shape[0]
-    idx_topk_part = bn.argpartition(-pred_scores, k - 1, axis=1)
-    topk_part = pred_scores[np.arange(n_users)[:, np.newaxis], idx_topk_part[:, :k]]
-    idx_part = np.argsort(-topk_part, axis=1)
-    idx_topk = idx_topk_part[np.arange(n_users)[:, np.newaxis], idx_part]
-    tp = 1. / np.log2(np.arange(2, k + 2))
-    DCG = (ground_truth[np.arange(n_users)[:, np.newaxis], idx_topk] * tp).sum(axis=1)
-    IDCG = np.array([(tp[:min(int(n), k)]).sum() for n in ground_truth.sum(axis=1)])
-    return DCG / IDCG
-
-
-def recall_at_k(pred_scores, ground_truth, k=100):
-    assert pred_scores.shape == ground_truth.shape, \
-        "'pred_scores' and 'ground_truth' must have the same shape."
-    k = min(pred_scores.shape[1], k)
-    idx = bn.argpartition(-pred_scores, k - 1, axis=1)
-    pred_scores_binary = np.zeros_like(pred_scores, dtype=bool)
-    pred_scores_binary[np.arange(pred_scores.shape[0])[:, np.newaxis], idx[:, :k]] = True
-    X_true_binary = (ground_truth > 0)
-    num = (np.logical_and(X_true_binary, pred_scores_binary).sum(axis=1)).astype(np.float32)
-    recall = num / np.minimum(k, X_true_binary.sum(axis=1))
-    return recall
-
-
 def prepare_dataset():
     ratings = pd.read_csv("datasets/ml-100k/u.data", sep='\t', header=None)
     users_info = pd.read_csv("datasets/ml-100k/u.user", sep='|', header=None)
@@ -274,7 +246,7 @@ def main():
 
         sat_level = formula_aggregator(axioms, dim=0)
 
-        return sat_level  # , np.array([f1.item(), f2.item(), f3.item(), f4.item(), f5.item()])
+        return sat_level
 
     # training of the LTN model for recommendation
     optimizer = torch.optim.Adam(likes.parameters(), lr=0.01)
@@ -282,12 +254,9 @@ def main():
     for epoch in range(100):
         train_loss = 0.0
         mean_sat = 0.0
-        mean_sat_single_formulas = np.array([0., 0., 0., 0., 0.])
         for batch_idx, (positive_pairs, negative_pairs, batch_users, batch_items) in enumerate(train_loader):
             optimizer.zero_grad()
-            #sat_agg, axioms_list = axioms(positive_pairs, negative_pairs, batch_users, batch_items)
             sat_agg = axioms(positive_pairs, negative_pairs, batch_users, batch_items)
-            #mean_sat_single_formulas += axioms_list
             mean_sat += sat_agg.item()
             loss = 1. - sat_agg
             loss.backward()
@@ -295,36 +264,18 @@ def main():
             train_loss += loss.item()
         train_loss = train_loss / len(train_loader)
         mean_sat = mean_sat / len(train_loader)
-        #mean_sat_single_formulas = mean_sat_single_formulas / len(train_loader)
 
         # test step
         mean_sat_test = 0.0
-        pos_mean = 0.0
-        neg_mean = 0.0
-        mean_sat_single_formulas_test = np.array([0., 0., 0., 0., 0.])
         for batch_idx, (positive_pairs, negative_pairs, batch_users, batch_items) in enumerate(test_loader):
-            #sat_agg, axioms_list = axioms(positive_pairs, negative_pairs, batch_users, batch_items)
             sat_agg = axioms(positive_pairs, negative_pairs, batch_users, batch_items)
-            #mean_sat_single_formulas_test += axioms_list
             mean_sat_test += sat_agg.item()
-            u_pos = ltn.variable('u_pos', positive_pairs[:, 0], add_batch_dim=False)
-            i_pos = ltn.variable('i_pos', positive_pairs[:, 1], add_batch_dim=False)
-            u_neg = ltn.variable('u_neg', negative_pairs[:, 0], add_batch_dim=False)
-            i_neg = ltn.variable('i_neg', negative_pairs[:, 1], add_batch_dim=False)
-            pos_mean += torch.mean(likes([get_u_features(u_pos), get_i_features(i_pos)]))
-            neg_mean += torch.mean(likes([get_u_features(u_neg), get_i_features(i_neg)]))
 
         mean_sat_test = mean_sat_test / len(test_loader)
-        pos_mean = pos_mean / len(test_loader)
-        neg_mean = neg_mean / len(test_loader)
-        #mean_sat_single_formulas_test = mean_sat_single_formulas_test / len(test_loader)
 
-        # we print metrics every epoch of training
-        '''logger.info(" epoch %d | loss %.4f | Train Sat %.3f | Formulas Sat Train %s | Test Sat %.3f | Formulas Sat Test %s ",
-                    epoch, train_loss, mean_sat, mean_sat_single_formulas, mean_sat_test, mean_sat_single_formulas_test)'''
         logger.info(
-            " epoch %d | loss %.4f | Train Sat %.3f | Mean Sat Test %s | Mean pos test %.3f | Mean neg test %.3f ",
-            epoch, train_loss, mean_sat, mean_sat_test, pos_mean, neg_mean)
+            " epoch %d | loss %.4f | Train Sat %.3f | Mean Sat Test %s ",
+            epoch, train_loss, mean_sat, mean_sat_test)
 
 
 if __name__ == "__main__":
