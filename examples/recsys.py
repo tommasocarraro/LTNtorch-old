@@ -220,7 +220,6 @@ def main():
             optimizer.zero_grad()
             sat_agg, axioms_list = axioms(positive_pairs, negative_pairs, batch_users, batch_items)
             mean_sat_single_formulas += axioms_list
-            print(mean_sat_single_formulas)
             mean_sat += sat_agg.item()
             loss = 1. - sat_agg
             loss.backward()
