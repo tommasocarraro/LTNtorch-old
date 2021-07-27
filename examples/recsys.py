@@ -307,10 +307,10 @@ def main():
             mean_sat_test += sat_agg.item()
             print("positive")
             for i in positive_pairs:
-                print(likes([get_u_features(i[0]), get_i_features(i[1])]))
+                print(likes([get_u_features(torch.tensor(i[0])), get_i_features(torch.tensor(i[1]))]))
             print("negative")
             for i in negative_pairs:
-                print(likes([get_u_features(i[0]), get_i_features(i[1])]))
+                print(likes([get_u_features(torch.tensor(i[0])), get_i_features(torch.tensor(i[1]))]))
         mean_sat_test = mean_sat_test / len(test_loader)
         #mean_sat_single_formulas_test = mean_sat_single_formulas_test / len(test_loader)
 
