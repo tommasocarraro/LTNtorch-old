@@ -139,11 +139,13 @@ class DataLoader(object):
         for _, start_idx in enumerate(range(0, n, self.batch_size)):
             end_idx = min(start_idx + self.batch_size, n)
             data = self.data[idxlist[start_idx:end_idx]]
-            index_positives = np.nonzero(data[:, 2])[0]
+            index_positives = np.where(data[:, 2] == 1)[0]
             index_negatives = np.where(data[:, 2] == 0)[0]
             positives = data[index_positives, :2]
             negatives = data[index_negatives, :2]
-            yield positives, negatives
+            batch_users = data[:, 0]
+            batch_items = data[:, 1]
+            yield positives, negatives, batch_users, batch_items
 
 
 def main():
@@ -154,24 +156,24 @@ def main():
     train_loader = DataLoader(ratings, 64, True)
 
     # convert dataset to tensors to properly work with LTN
-    u_i_matrix = torch.tensor(u_i_matrix.todense())  # this problem has to be solved, for the moment it could work since
+    u_i_matrix = torch.tensor(u_i_matrix.todense()).to(ltn.device)  # this problem has to be solved, for the moment it could work since
     # data is small, the problem is that csr matrix does not work well with PyTorch tensors and PyTorch sparse is still
     # in beta
-    items = torch.tensor(items)
-    users = torch.tensor(users)
+    items = torch.tensor(items).to(ltn.device)
+    users = torch.tensor(users).to(ltn.device)
 
     # create Likes and Sim predicates
-    likes = ltn.Predicate(Likes())
+    likes = ltn.Predicate(Likes()).to(ltn.device)
     # this measures the similarity between two users' behavioral vectors (vectors containing users' preferences)
-    sim = ltn.Predicate(lambda_func=lambda args: torch.nn.functional.cosine_similarity(args[0], args[1], dim=1, eps=1e-8))
+    sim = ltn.Predicate(lambda_func=lambda args: torch.nn.functional.cosine_similarity(args[0], args[1], dim=1, eps=1e-8)).to(ltn.device)
 
     # create functions that return users and items information given the indexes
     # given a user index, it returns the features of the user (demographic information)
-    get_u_features = ltn.Function(lambda_func=lambda u: users[u[0]])
+    get_u_features = ltn.Function(lambda_func=lambda u: users[u[0]]).to(ltn.device)
     # given an item index, it returns the features of the item (movie's year and genres)
-    get_i_features = ltn.Function(lambda_func=lambda i: items[i[0]])
+    get_i_features = ltn.Function(lambda_func=lambda i: items[i[0]]).to(ltn.device)
     # given a user index, it returns his/her historical behaviour (rating vector)
-    get_u_ratings = ltn.Function(lambda_func=lambda u: u_i_matrix[u[0]])
+    get_u_ratings = ltn.Function(lambda_func=lambda u: u_i_matrix[u[0]]).to(ltn.device)
 
     # Operators to build logical axioms
     Forall = ltn.WrapperQuantifier(ltn.fuzzy_ops.AggregPMeanError(p=2), quantification_type="forall")
@@ -182,7 +184,10 @@ def main():
     formula_aggregator = ltn.fuzzy_ops.AggregPMeanError(p=2)
 
     # here, we define the knowledge base for the recommendation task
-    def axioms(positive_pairs, negative_pairs):
+    def axioms(positive_pairs, negative_pairs, batch_users, batch_items):
+        u1 = ltn.variable('u1', batch_users, add_batch_dim=False)
+        u2 = ltn.variable('u2', batch_users, add_batch_dim=False)
+        i = ltn.variable('i', batch_items, add_batch_dim=False)
         u_pos = ltn.variable('u_pos', positive_pairs[:, 0], add_batch_dim=False)
         i_pos = ltn.variable('i_pos', positive_pairs[:, 1], add_batch_dim=False)
         u_neg = ltn.variable('u_neg', negative_pairs[:, 0], add_batch_dim=False)
@@ -190,7 +195,14 @@ def main():
 
         axioms = [
             Forall(ltn.diag([u_pos, i_pos]), likes([get_u_features(u_pos), get_i_features(i_pos)])),
-            Forall(ltn.diag([u_neg, i_neg]), Not(likes([get_u_features(u_neg), get_i_features(i_neg)])))
+            Forall(ltn.diag([u_neg, i_neg]), Not(likes([get_u_features(u_neg), get_i_features(i_neg)]))),
+            Forall([u1, u2, i], Implies(
+                                        And(
+                                            sim([get_u_ratings(u1), get_u_ratings(u2)]),
+                                            likes([get_u_features(u1), get_i_features(i)])
+                                        ),
+                                        likes([get_u_features(u2), get_i_features(i)])
+                                        ))
         ]
 
         axioms = torch.stack(axioms)
@@ -204,9 +216,9 @@ def main():
     for epoch in range(100):
         train_loss = 0.0
         mean_sat = 0.0
-        for batch_idx, (positive_pairs, negative_pairs) in enumerate(train_loader):
+        for batch_idx, (positive_pairs, negative_pairs, batch_users, batch_items) in enumerate(train_loader):
             optimizer.zero_grad()
-            sat_agg = axioms(positive_pairs, negative_pairs)
+            sat_agg = axioms(positive_pairs, negative_pairs, batch_users, batch_items)
             mean_sat += sat_agg.item()
             loss = 1. - sat_agg
             loss.backward()
