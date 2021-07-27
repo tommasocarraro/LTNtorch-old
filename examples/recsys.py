@@ -221,6 +221,7 @@ def main():
                                         ),
                                         likes([get_u_features(u2), get_i_features(i1)])
                                         ))
+        '''
         f4 = Forall([u1, u2, i1], Implies(
             And(
                 sim([get_u_features(u1), get_u_features(u2)]),
@@ -234,13 +235,13 @@ def main():
                 likes([get_u_features(u1), get_i_features(i1)])
             ),
             likes([get_u_features(u1), get_i_features(i2)])
-        ))
+        ))'''
 
-        axioms = torch.stack([f1, f2, f3, f4, f5])
+        axioms = torch.stack([f1, f2, f3])
 
         sat_level = formula_aggregator(axioms, dim=0)
 
-        return sat_level, np.array([f1.item(), f2.item(), f3.item(), f4.item(), f5.item()])
+        return sat_level  # , np.array([f1.item(), f2.item(), f3.item(), f4.item(), f5.item()])
 
     # training of the LTN model for recommendation
     optimizer = torch.optim.Adam(likes.parameters(), lr=0.01)
@@ -251,8 +252,9 @@ def main():
         mean_sat_single_formulas = np.array([0., 0., 0., 0., 0.])
         for batch_idx, (positive_pairs, negative_pairs, batch_users, batch_items) in enumerate(train_loader):
             optimizer.zero_grad()
-            sat_agg, axioms_list = axioms(positive_pairs, negative_pairs, batch_users, batch_items)
-            mean_sat_single_formulas += axioms_list
+            #sat_agg, axioms_list = axioms(positive_pairs, negative_pairs, batch_users, batch_items)
+            sat_agg = axioms(positive_pairs, negative_pairs, batch_users, batch_items)
+            #mean_sat_single_formulas += axioms_list
             mean_sat += sat_agg.item()
             loss = 1. - sat_agg
             loss.backward()
@@ -260,27 +262,30 @@ def main():
             train_loss += loss.item()
         train_loss = train_loss / len(train_loader)
         mean_sat = mean_sat / len(train_loader)
-        mean_sat_single_formulas = mean_sat_single_formulas / len(train_loader)
+        #mean_sat_single_formulas = mean_sat_single_formulas / len(train_loader)
 
         # test step
         mean_sat_test = 0.0
         mean_sat_single_formulas_test = np.array([0., 0., 0., 0., 0.])
         for batch_idx, (positive_pairs, negative_pairs, batch_users, batch_items) in enumerate(test_loader):
             optimizer.zero_grad()
-            sat_agg, axioms_list = axioms(positive_pairs, negative_pairs, batch_users, batch_items)
-            mean_sat_single_formulas_test += axioms_list
+            #sat_agg, axioms_list = axioms(positive_pairs, negative_pairs, batch_users, batch_items)
+            sat_agg = axioms(positive_pairs, negative_pairs, batch_users, batch_items)
+            #mean_sat_single_formulas_test += axioms_list
             mean_sat_test += sat_agg.item()
             loss = 1. - sat_agg
             loss.backward()
             optimizer.step()
             train_loss += loss.item()
         mean_sat_test = mean_sat_test / len(test_loader)
-        mean_sat_single_formulas_test = mean_sat_single_formulas_test / len(test_loader)
+        #mean_sat_single_formulas_test = mean_sat_single_formulas_test / len(test_loader)
 
         # we print metrics every epoch of training
-        logger.info(" epoch %d | loss %.4f | Train Sat %.3f | Formulas Sat Train %s | Test Sat %.3f | Formulas Sat Test %s ",
-                    epoch, train_loss, mean_sat, mean_sat_single_formulas, mean_sat_test, mean_sat_single_formulas_test)
-
+        '''logger.info(" epoch %d | loss %.4f | Train Sat %.3f | Formulas Sat Train %s | Test Sat %.3f | Formulas Sat Test %s ",
+                    epoch, train_loss, mean_sat, mean_sat_single_formulas, mean_sat_test, mean_sat_single_formulas_test)'''
+        logger.info(
+            " epoch %d | loss %.4f | Train Sat %.3f | Formulas Sat Train %s ",
+            epoch, train_loss, mean_sat, mean_sat_single_formulas)
 
 
 if __name__ == "__main__":
