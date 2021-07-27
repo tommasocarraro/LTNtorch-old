@@ -272,15 +272,10 @@ def main():
         mean_sat_test = 0.0
         mean_sat_single_formulas_test = np.array([0., 0., 0., 0., 0.])
         for batch_idx, (positive_pairs, negative_pairs, batch_users, batch_items) in enumerate(test_loader):
-            optimizer.zero_grad()
             #sat_agg, axioms_list = axioms(positive_pairs, negative_pairs, batch_users, batch_items)
             sat_agg = axioms(positive_pairs, negative_pairs, batch_users, batch_items)
             #mean_sat_single_formulas_test += axioms_list
             mean_sat_test += sat_agg.item()
-            loss = 1. - sat_agg
-            loss.backward()
-            optimizer.step()
-            train_loss += loss.item()
         mean_sat_test = mean_sat_test / len(test_loader)
         #mean_sat_single_formulas_test = mean_sat_single_formulas_test / len(test_loader)
 
