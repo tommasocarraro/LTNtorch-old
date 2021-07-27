@@ -42,9 +42,13 @@ def prepare_dataset():
     g = ratings.groupby('user')
     ratings_test = pd.DataFrame(columns=['user', 'item', 'rating'])
     for _, group in g:
-        group = group[group['rating'] == 1]
-        n_ratings_to_remove = np.round(len(group) * 20 / 100)
-        ratings_to_remove = group.sample(n=int(n_ratings_to_remove))
+        group_pos = group[group['rating'] == 1]
+        group_neg = group[group['rating'] == 0]
+        n_ratings_to_remove = np.round(len(group) * 10 / 100)
+        ratings_to_remove = group_pos.sample(n=int(n_ratings_to_remove))
+        ratings_test = ratings_test.append(ratings_to_remove)
+        ratings = ratings.drop(ratings_to_remove.index)
+        ratings_to_remove = group_neg.sample(n=int(n_ratings_to_remove))
         ratings_test = ratings_test.append(ratings_to_remove)
         ratings = ratings.drop(ratings_to_remove.index)
 
