@@ -157,7 +157,7 @@ def main():
     ratings, u_i_matrix, items, users = prepare_dataset()
 
     # create DataLoader for the training of the model
-    train_loader = DataLoader(ratings, 128, True)
+    train_loader = DataLoader(ratings, 256, True)
 
     # convert dataset to tensors to properly work with LTN
     u_i_matrix = torch.tensor(u_i_matrix.todense()).to(ltn.device)  # this problem has to be solved, for the moment it could work since
