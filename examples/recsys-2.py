@@ -158,7 +158,7 @@ class DataLoader(object):
         for _, start_idx in enumerate(range(0, n, self.batch_size)):
             end_idx = min(start_idx + self.batch_size, n)
             data = self.data[idxlist[start_idx:end_idx]]
-            yield data[:, 0].astype(np.int64), data[:, 1].astype(np.int64), data[:, 2]
+            yield data[:, 0].astype(np.int64), data[:, 1].astype(np.int64), data[:, 2].astype(np.float32)
 
 
 def main():
