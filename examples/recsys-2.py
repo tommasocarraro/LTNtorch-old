@@ -181,15 +181,15 @@ def main():
     # this measures the similarity between two users' behavioral vectors (vectors containing users' preferences)
     sim = ltn.Predicate(lambda_func=lambda args: torch.nn.functional.cosine_similarity(args[0], args[1], dim=1, eps=1e-8)).to(ltn.device)
     # this measures the similarity between two truth values in [0., 1.]
-    eq = ltn.Predicate(lambda_func=lambda args: torch.exp(-torch.norm(args[0] - args[1], dim=1)))
+    eq = ltn.Predicate(lambda_func=lambda args: torch.exp(-torch.norm(torch.unsqueeze(args[0] - args[1], 1), dim=1)))
 
     # create functions that return users and items information given the indexes
     # given a user index, it returns the features of the user (demographic information)
-    get_u_features = ltn.Function(lambda_func=lambda u: torch.flatten(users[u[0]], start_dim=1)).to(ltn.device)
+    get_u_features = ltn.Function(lambda_func=lambda u: users[u[0]]).to(ltn.device)
     # given an item index, it returns the features of the item (movie's year and genres)
-    get_i_features = ltn.Function(lambda_func=lambda i: torch.flatten(items[i[0]], start_dim=1)).to(ltn.device)
+    get_i_features = ltn.Function(lambda_func=lambda i: items[i[0]]).to(ltn.device)
     # given a user index, it returns his/her historical behaviour (rating vector)
-    get_u_ratings = ltn.Function(lambda_func=lambda u: torch.flatten(u_i_matrix[u[0]], start_dim=1)).to(ltn.device)
+    get_u_ratings = ltn.Function(lambda_func=lambda u: u_i_matrix[u[0]]).to(ltn.device)
 
     # Operators to build logical axioms
     Forall = ltn.WrapperQuantifier(ltn.fuzzy_ops.AggregPMeanError(p=2), quantification_type="forall")
@@ -201,10 +201,10 @@ def main():
 
     # here, we define the knowledge base for the recommendation task
     def axioms(uid, iid, rate):
-        u1 = ltn.variable('u1', uid)
-        u2 = ltn.variable('u2', uid)
-        i = ltn.variable('i', iid)
-        r = ltn.variable('r', rate)
+        u1 = ltn.variable('u1', uid, add_batch_dim=False)
+        u2 = ltn.variable('u2', uid, add_batch_dim=False)
+        i = ltn.variable('i', iid, add_batch_dim=False)
+        r = ltn.variable('r', rate, add_batch_dim=False)
 
         f1 = Forall(ltn.diag([u1, i, r]), eq([likes([get_u_features(u1), get_i_features(i)]), r]))
         f2 = Forall([u1, u2, i], Implies(
