@@ -12,6 +12,9 @@ logger = logging.getLogger(__name__)
 # TODO vedere come tenere la matrice sparsa e poi costruirsi a batch il tensor normale
 # TODO lasciare i rating come sono e creare una copia dei rating tra 0 e 1 che rispecchi la fuzzy logic
 # TODO la matrice dei rating sparsa ora deve contenere i rating in fuzzi e anche la similarita' tiene conto di quei ratings
+# TODO portarsi dietro due strutture dati per i predicati seen e likes, seen e' 1 quando un utente ha visto, likes quando gli e' piaciuto
+# TODO i ratings stanno tra 0 e 1, 0 e' 1, 0.25 e' 2, 0.5 e' 3, 0.75 e' 4, 1.0 e' 5
+# TODO la similarita' diventa un predicato complesso che e' la congiunzione tra la similarita' tra visto-nonvisto e la similarita' del vettore dei rating concentrata solamente sui film in comune
 
 
 def prepare_dataset():
