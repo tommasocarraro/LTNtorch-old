@@ -12,7 +12,6 @@ logger = logging.getLogger(__name__)
 # TODO vedere come tenere la matrice sparsa e poi costruirsi a batch il tensor normale
 # TODO lasciare i rating come sono e creare una copia dei rating tra 0 e 1 che rispecchi la fuzzy logic
 # TODO la matrice dei rating sparsa ora deve contenere i rating in fuzzi e anche la similarita' tiene conto di quei ratings
-# TODO la matrice sparsa deve contenere solo i likes e non likes e non tutte le interazioni in questo specifico caso
 
 
 def prepare_dataset():
@@ -37,33 +36,29 @@ def prepare_dataset():
     ratings['item'] -= 1
     users_info['user'] -= 1
     items_info['item'] -= 1
-    ratings['rating'][ratings['rating'] < 4] = 0
-    ratings['rating'][ratings['rating'] >= 4] = 1
+    # convert ratings to fuzzy logic ratings 1 -> 0.2, 2 -> 0.4, 3 -> 0.6, 4 -> 0.8, 5 -> 1.0
+    ratings['rating'] /= 5
 
     # create test_set
-    # 20% of positive ratings are put in test set
+    # TODO in una versione successiva bisogna assicurarsi che che se un rating e' unico nel dataset, deve comparire solo durante il training e non solo durante il test
+    # 20% of ratings of every user are put in test set
     g = ratings.groupby('user')
     ratings_test = pd.DataFrame(columns=['user', 'item', 'rating'])
     for _, group in g:
-        group_pos = group[group['rating'] == 1]
-        group_neg = group[group['rating'] == 0]
-        n_rating_remove_pos = np.round(len(group_pos) * 20 / 100)
-        n_rating_remove_neg = np.round(len(group_neg) * 20 / 100)
-        ratings_to_remove = group_pos.sample(n=int(n_rating_remove_pos))
-        ratings_test = ratings_test.append(ratings_to_remove)
-        ratings = ratings.drop(ratings_to_remove.index)
-        ratings_to_remove = group_neg.sample(n=int(n_rating_remove_neg))
+        n_ratings_to_remove = np.round(len(group) * 20 / 100)
+        ratings_to_remove = group.sample(n=int(n_ratings_to_remove))
         ratings_test = ratings_test.append(ratings_to_remove)
         ratings = ratings.drop(ratings_to_remove.index)
 
     ratings = ratings.reset_index(drop=True)
+    # random shuffle of test ratings
     ratings_test = ratings_test.sample(frac=1)
     ratings_test = ratings_test.reset_index(drop=True)
 
     # build sparse user-item matrix, the sparse matrix has a 1 if user has interacted with the item, 0 otherwise
     # even if the user has rated badly an item, there will be a 1 in the sparse matrix for that user-item pair
     g = ratings.groupby('user')
-    rows, cols = [], []
+    rows, cols, values = [], [], []
     for _, group in g:
         # code to avoid to count for zeros
         # non_zeros = group['rating'].to_numpy().nonzero()[0]
@@ -71,8 +66,8 @@ def prepare_dataset():
         # cols.extend(group['item'].to_numpy()[non_zeros])
         cols.extend(list(group['item']))
         rows.extend(list(group['user']))
+        values.extend(list(group['rating']))
 
-    values = np.ones(len(rows))
     # the user-item matrix does not contain test interactions
     user_item_matrix = csr_matrix((values, (rows, cols)), (n_users, n_items))
 
@@ -113,7 +108,7 @@ def prepare_dataset():
     # remove 'user' column
     users_info = users_info.drop(columns=['user', 'zip'])
 
-    return ratings.to_numpy(), ratings_test.to_numpy().astype(np.int64), user_item_matrix, items_info.to_numpy(), users_info.to_numpy()
+    return ratings.to_numpy(), ratings_test.to_numpy(), user_item_matrix, items_info.to_numpy(), users_info.to_numpy()
 
 
 class Likes(torch.nn.Module):
@@ -163,13 +158,7 @@ class DataLoader(object):
         for _, start_idx in enumerate(range(0, n, self.batch_size)):
             end_idx = min(start_idx + self.batch_size, n)
             data = self.data[idxlist[start_idx:end_idx]]
-            index_positives = np.where(data[:, 2] == 1)[0]
-            index_negatives = np.where(data[:, 2] == 0)[0]
-            positives = data[index_positives, :2]
-            negatives = data[index_negatives, :2]
-            batch_users = data[:, 0]
-            batch_items = data[:, 1]
-            yield positives, negatives, batch_users, batch_items
+            yield data[:, 0].astype(np.int64), data[:, 1].astype(np.int64), data[:, 2]
 
 
 def main():
@@ -187,18 +176,20 @@ def main():
     items = torch.tensor(items).to(ltn.device)
     users = torch.tensor(users).to(ltn.device)
 
-    # create Likes and Sim predicates
+    # create Likes, Sim and Eq predicates
     likes = ltn.Predicate(Likes()).to(ltn.device)
     # this measures the similarity between two users' behavioral vectors (vectors containing users' preferences)
     sim = ltn.Predicate(lambda_func=lambda args: torch.nn.functional.cosine_similarity(args[0], args[1], dim=1, eps=1e-8)).to(ltn.device)
+    # this measures the similarity between two truth values in [0., 1.]
+    eq = ltn.Predicate(lambda_func=lambda args: torch.exp(-torch.norm(args[0] - args[1], dim=1)))
 
     # create functions that return users and items information given the indexes
     # given a user index, it returns the features of the user (demographic information)
-    get_u_features = ltn.Function(lambda_func=lambda u: users[u[0]]).to(ltn.device)
+    get_u_features = ltn.Function(lambda_func=lambda u: torch.flatten(users[u[0]], start_dim=1)).to(ltn.device)
     # given an item index, it returns the features of the item (movie's year and genres)
-    get_i_features = ltn.Function(lambda_func=lambda i: items[i[0]]).to(ltn.device)
+    get_i_features = ltn.Function(lambda_func=lambda i: torch.flatten(items[i[0]], start_dim=1)).to(ltn.device)
     # given a user index, it returns his/her historical behaviour (rating vector)
-    get_u_ratings = ltn.Function(lambda_func=lambda u: u_i_matrix[u[0]]).to(ltn.device)
+    get_u_ratings = ltn.Function(lambda_func=lambda u: torch.flatten(u_i_matrix[u[0]], start_dim=1)).to(ltn.device)
 
     # Operators to build logical axioms
     Forall = ltn.WrapperQuantifier(ltn.fuzzy_ops.AggregPMeanError(p=2), quantification_type="forall")
@@ -209,24 +200,19 @@ def main():
     formula_aggregator = ltn.fuzzy_ops.AggregPMeanError(p=2)
 
     # here, we define the knowledge base for the recommendation task
-    def axioms(positive_pairs, negative_pairs, batch_users, batch_items):
-        u1 = ltn.variable('u1', batch_users, add_batch_dim=False)
-        u2 = ltn.variable('u2', batch_users, add_batch_dim=False)
-        i1 = ltn.variable('i1', batch_items, add_batch_dim=False)
-        i2 = ltn.variable('i2', batch_items, add_batch_dim=False)
-        u_pos = ltn.variable('u_pos', positive_pairs[:, 0], add_batch_dim=False)
-        i_pos = ltn.variable('i_pos', positive_pairs[:, 1], add_batch_dim=False)
-        u_neg = ltn.variable('u_neg', negative_pairs[:, 0], add_batch_dim=False)
-        i_neg = ltn.variable('i_neg', negative_pairs[:, 1], add_batch_dim=False)
+    def axioms(uid, iid, rate):
+        u1 = ltn.variable('u1', uid)
+        u2 = ltn.variable('u2', uid)
+        i = ltn.variable('i', iid)
+        r = ltn.variable('r', rate)
 
-        f1 = Forall(ltn.diag([u_pos, i_pos]), likes([get_u_features(u_pos), get_i_features(i_pos)]))
-        f2 = Forall(ltn.diag([u_neg, i_neg]), Not(likes([get_u_features(u_neg), get_i_features(i_neg)])))
-        f3 = Forall([u1, u2, i1], Implies(
+        f1 = Forall(ltn.diag([u1, i, r]), eq([likes([get_u_features(u1), get_i_features(i)]), r]))
+        f2 = Forall([u1, u2, i], Implies(
                                         And(
                                             sim([get_u_ratings(u1), get_u_ratings(u2)]),
-                                            likes([get_u_features(u1), get_i_features(i1)])
+                                            likes([get_u_features(u1), get_i_features(i)])
                                         ),
-                                        likes([get_u_features(u2), get_i_features(i1)])
+                                        likes([get_u_features(u2), get_i_features(i)])
                                         ))
         '''
         f4 = Forall([u1, u2, i1], Implies(
@@ -244,7 +230,7 @@ def main():
             likes([get_u_features(u1), get_i_features(i2)])
         ))'''
 
-        axioms = torch.stack([f1, f2, f3])
+        axioms = torch.stack([f1, f2])
 
         sat_level = formula_aggregator(axioms, dim=0)
 
@@ -256,12 +242,13 @@ def main():
     for epoch in range(100):
         train_loss = 0.0
         mean_sat = 0.0
-        for batch_idx, (positive_pairs, negative_pairs, batch_users, batch_items) in enumerate(train_loader):
+        for batch_idx, (uid, iid, rate) in enumerate(train_loader):
             optimizer.zero_grad()
-            sat_agg = axioms(positive_pairs, negative_pairs, batch_users, batch_items)
+            sat_agg = axioms(uid, iid, rate)
             mean_sat += sat_agg.item()
             loss = 1. - sat_agg
             loss.backward()
+            print(loss)
             optimizer.step()
             train_loss += loss.item()
         train_loss = train_loss / len(train_loader)
@@ -269,8 +256,8 @@ def main():
 
         # test step
         mean_sat_test = 0.0
-        for batch_idx, (positive_pairs, negative_pairs, batch_users, batch_items) in enumerate(test_loader):
-            sat_agg = axioms(positive_pairs, negative_pairs, batch_users, batch_items)
+        for batch_idx, (uid, iid, rate) in enumerate(test_loader):
+            sat_agg = axioms(uid, iid, rate)
             mean_sat_test += sat_agg.item()
 
         mean_sat_test = mean_sat_test / len(test_loader)
