@@ -285,7 +285,6 @@ def main():
             mean_sat += sat_agg.item()
             loss = 1. - sat_agg
             loss.backward()
-            print(loss)
             optimizer.step()
             train_loss += loss.item()
         train_loss = train_loss / len(train_loader)
