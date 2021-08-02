@@ -304,8 +304,8 @@ def main():
             mean_sat_test += sat_agg.item()
             # compute rating prediction metrics
             predictions = likes.model([users[uid].float(), items[iid].float()]).detach().cpu().numpy().flatten()
-            mean_mae += compute_mae(predictions, rate)
-            mean_rmse += compute_rmse(predictions, rate)
+            mean_mae += compute_mae(predictions * 4 + 1, rate * 4 + 1)
+            mean_rmse += compute_rmse(predictions * 4 + 1, rate * 4 + 1)
 
         mean_rmse = mean_rmse / len(test_loader)
         mean_mae = mean_mae / len(test_loader)
