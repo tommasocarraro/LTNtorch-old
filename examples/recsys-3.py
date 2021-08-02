@@ -285,7 +285,7 @@ def main():
 
     for epoch in range(100):
         train_loss = 0.0
-        mean_sat = 0.0
+        mean_sat, tr_mean_mae, tr_mean_rmse = 0.0, 0.0, 0.0
         for batch_idx, (uid, iid, rate) in enumerate(train_loader):
             optimizer.zero_grad()
             sat_agg = axioms(uid, iid, rate)
@@ -294,8 +294,13 @@ def main():
             loss.backward()
             optimizer.step()
             train_loss += loss.item()
+            predictions = likes.model([users[uid].float(), items[iid].float()]).detach().cpu().numpy().flatten()
+            tr_mean_mae += compute_mae(predictions * 4 + 1, rate * 4 + 1)
+            tr_mean_rmse += compute_rmse(predictions * 4 + 1, rate * 4 + 1)
         train_loss = train_loss / len(train_loader)
         mean_sat = mean_sat / len(train_loader)
+        tr_mean_mae = tr_mean_mae / len(train_loader)
+        tr_mean_rmse = tr_mean_rmse / len(train_loader)
 
         # test step
         mean_sat_test, mean_mae, mean_rmse = 0.0, 0.0, 0.0
@@ -312,8 +317,8 @@ def main():
         mean_sat_test = mean_sat_test / len(test_loader)
 
         logger.info(
-            " epoch %d | loss %.4f | Train Sat %.3f | Test Sat %.3f | Test RMSE %.3f | Test MAE %.3f ",
-            epoch, train_loss, mean_sat, mean_sat_test, mean_rmse, mean_mae)
+            " epoch %d | loss %.4f | Train Sat %.3f | Test Sat %.3f | Train RMSE %.3f | Train MAE %.3f | Test RMSE %.3f | Test MAE %.3f ",
+            epoch, train_loss, mean_sat, mean_sat_test, tr_mean_rmse, tr_mean_mae, mean_rmse, mean_mae)
 
 
 if __name__ == "__main__":
