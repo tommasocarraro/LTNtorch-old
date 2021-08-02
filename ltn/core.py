@@ -10,6 +10,7 @@ import ltn
 # TODO mettere il .item() quando si calacolano le metriche per non avere problemi di memoria
 # TODO nei tutorial si parla di domains invece che groundings. Pensare se si puo' sistemare
 # TODO provare a usare il lambda layer per implementare le variabili proposizionali, con lambda_func che fa il clamp
+# TODO variabile proposizionale puo' essere usata la logistica per fare il clamp
 
 
 def constant(value, trainable=False):

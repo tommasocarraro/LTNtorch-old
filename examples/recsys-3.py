@@ -273,6 +273,13 @@ def main():
 
         return sat_level
 
+    # test metrics
+    def compute_mae(predictions, ground_truth):
+        return torch.mean(torch.abs(predictions - ground_truth))
+
+    def compute_rmse(predictions, ground_truth):
+        return torch.sqrt(torch.mean(torch.square(predictions - ground_truth)))
+
     # training of the LTN model for recommendation
     optimizer = torch.optim.Adam(likes.parameters(), lr=0.001)
 
@@ -291,16 +298,22 @@ def main():
         mean_sat = mean_sat / len(train_loader)
 
         # test step
-        mean_sat_test = 0.0
+        mean_sat_test, mean_mae, mean_rmse = 0.0, 0.0, 0.0
         for batch_idx, (uid, iid, rate) in enumerate(test_loader):
             sat_agg = axioms(uid, iid, rate)
             mean_sat_test += sat_agg.item()
+            # compute rating prediction metrics
+            predictions = likes.model([users[uid].float(), items[iid].float()])
+            mean_mae += compute_mae(torch.flatten(predictions, start_dim=0), rate)
+            mean_rmse += compute_rmse(torch.flatten(predictions, start_dim=0), rate)
 
+        mean_rmse = mean_rmse / len(test_loader)
+        mean_mae = mean_mae / len(test_loader)
         mean_sat_test = mean_sat_test / len(test_loader)
 
         logger.info(
-            " epoch %d | loss %.4f | Train Sat %.3f | Mean Sat Test %s ",
-            epoch, train_loss, mean_sat, mean_sat_test)
+            " epoch %d | loss %.4f | Train Sat %.3f | Test Sat %.3f | Test RMSE %.3f | Test MAE %.3f ",
+            epoch, train_loss, mean_sat, mean_sat_test, mean_rmse, mean_mae)
 
 
 if __name__ == "__main__":
