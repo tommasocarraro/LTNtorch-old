@@ -304,8 +304,8 @@ def main():
             mean_sat_test += sat_agg.item()
             # compute rating prediction metrics
             predictions = likes.model([users[uid].float(), items[iid].float()])
-            mean_mae += compute_mae(torch.flatten(predictions, start_dim=0), rate)
-            mean_rmse += compute_rmse(torch.flatten(predictions, start_dim=0), rate)
+            mean_mae += compute_mae(torch.flatten(predictions, start_dim=0), torch.tensor(rate))
+            mean_rmse += compute_rmse(torch.flatten(predictions, start_dim=0), torch.tensor(rate))
 
         mean_rmse = mean_rmse / len(test_loader)
         mean_mae = mean_mae / len(test_loader)
