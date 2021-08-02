@@ -275,10 +275,10 @@ def main():
 
     # test metrics
     def compute_mae(predictions, ground_truth):
-        return torch.mean(torch.abs(predictions - ground_truth))
+        return np.mean(np.abs(predictions - ground_truth))
 
     def compute_rmse(predictions, ground_truth):
-        return torch.sqrt(torch.mean(torch.square(predictions - ground_truth)))
+        return np.sqrt(np.mean(np.square(predictions - ground_truth)))
 
     # training of the LTN model for recommendation
     optimizer = torch.optim.Adam(likes.parameters(), lr=0.001)
@@ -303,9 +303,9 @@ def main():
             sat_agg = axioms(uid, iid, rate)
             mean_sat_test += sat_agg.item()
             # compute rating prediction metrics
-            predictions = likes.model([users[uid].float(), items[iid].float()])
-            mean_mae += compute_mae(torch.flatten(predictions, start_dim=0), torch.tensor(rate))
-            mean_rmse += compute_rmse(torch.flatten(predictions, start_dim=0), torch.tensor(rate))
+            predictions = likes.model([users[uid].float(), items[iid].float()]).detach().cpu().numpy().flatten()
+            mean_mae += compute_mae(predictions, rate)
+            mean_rmse += compute_rmse(predictions, rate)
 
         mean_rmse = mean_rmse / len(test_loader)
         mean_mae = mean_mae / len(test_loader)
