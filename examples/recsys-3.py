@@ -206,6 +206,7 @@ def main():
     # rate_matrix = torch.tensor(rate_matrix.todense()).to(ltn.device)  # this problem has to be solved, for the moment it
     # could work since data is small, the problem is that csr matrix does not work well with PyTorch tensors and
     # PyTorch sparse is still in beta
+    sim_users = sim_users.to(ltn.device)
     items = torch.tensor(items).to(ltn.device)
     users = torch.tensor(users).to(ltn.device)
 
