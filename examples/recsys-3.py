@@ -250,6 +250,7 @@ def main():
         r = ltn.variable('r', rate, add_batch_dim=False)
 
         f1 = Forall(ltn.diag([u1, i, r]), Equiv(likes([get_u_features(u1), get_i_features(i)]), r))
+        '''
         f2 = Forall([u1, u2, i],
                     Implies(
                         And(
@@ -261,6 +262,7 @@ def main():
                     mask_vars=[u1, u2],
                     mask_fn=lambda mask_vars: ~torch.eq(mask_vars[0], mask_vars[1])
                     )
+        '''
         '''
         f4 = Forall([u1, u2, i1], Implies(
             And(
@@ -277,11 +279,11 @@ def main():
             likes([get_u_features(u1), get_i_features(i2)])
         ))'''
 
-        axioms = torch.stack([f1, f2])
+        #axioms = torch.stack([f1, f2])
 
-        sat_level = formula_aggregator(axioms, dim=0)
+        #sat_level = formula_aggregator(axioms, dim=0)
 
-        return sat_level
+        return f1  # sat_level
 
     # test metrics
     def compute_mae(predictions, ground_truth):
