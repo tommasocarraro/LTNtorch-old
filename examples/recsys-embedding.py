@@ -194,7 +194,7 @@ def main():
     # prepare dataset for recommendation
     ratings, ratings_test, seen_matrix, rate_matrix, sim_users, items, users = prepare_dataset()
 
-    like_embedding = torch.randn((users.shape[0], items.shape[0]), requires_grad=True)
+    like_embedding = torch.randn((users.shape[0], items.shape[0]), requires_grad=True).to(ltn.device)
 
     # create DataLoader for the training and testing of the model
     train_loader = DataLoader(ratings, 256, True)
