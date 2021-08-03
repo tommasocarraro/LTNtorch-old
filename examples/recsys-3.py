@@ -4,9 +4,11 @@ import pandas as pd
 from scipy.sparse import csr_matrix
 import ltn
 import logging
+
 logging.basicConfig()
 logging.getLogger().setLevel(logging.DEBUG)
 logger = logging.getLogger(__name__)
+
 
 # TODO risolvere il problema della incompatibilita' tra matrici sparse e PyTorch
 # TODO vedere come tenere la matrice sparsa e poi costruirsi a batch il tensor normale
@@ -24,7 +26,8 @@ def prepare_dataset():
     users_info.columns = ['user', 'age', 'gender', 'occupation', 'zip']
     items_info.columns = ['item', 'title', 'release_date', 'video_release_date', 'imdb_url', 'unknown', 'Action',
                           'Adventure', 'Animation', 'Children', 'Comedy', 'Crime', 'Documentary', 'Drama', 'Fantasy',
-                          'Film-Noir', 'Horror', 'Musical', 'Mystery', 'Romance', 'Sci-Fi', 'Thriller', 'War', 'Western']
+                          'Film-Noir', 'Horror', 'Musical', 'Mystery', 'Romance', 'Sci-Fi', 'Thriller', 'War',
+                          'Western']
     ratings.columns = ['user', 'item', 'rating', 'timestamp']
     ratings = ratings.drop('timestamp', axis=1)
     # remove item 267 from the dataset since it is not informative
@@ -94,11 +97,13 @@ def prepare_dataset():
     for i in range(seen_matrix.shape[0]):
         expanded_user_interactions = seen_matrix[i].expand(n_users, n_items)
         expanded_user_ratings = rate_matrix[i].expand(n_users, n_items)
-        cos_sim_user_interactions = torch.nn.functional.cosine_similarity(expanded_user_interactions, seen_matrix, dim=1)
+        cos_sim_user_interactions = torch.nn.functional.cosine_similarity(expanded_user_interactions, seen_matrix,
+                                                                          dim=1)
         user_shared_items = expanded_user_interactions * seen_matrix
         user_shared_ratings = expanded_user_ratings * user_shared_items
         other_users_shared_ratings = rate_matrix * user_shared_items
-        cos_sim_user_ratings = torch.nn.functional.cosine_similarity(other_users_shared_ratings, user_shared_ratings, dim=1)
+        cos_sim_user_ratings = torch.nn.functional.cosine_similarity(other_users_shared_ratings, user_shared_ratings,
+                                                                     dim=1)
         final_cos_sim = alpha * cos_sim_user_interactions + (1 - alpha) * cos_sim_user_ratings
         sim_users[i] = final_cos_sim
 
@@ -150,6 +155,7 @@ class Likes(torch.nn.Module):
     given to this predicate in the form of features. For the user the features are the demographic information, while
     for the items are the content information.
     """
+
     def __init__(self):
         super(Likes, self).__init__()
         self.elu = torch.nn.ELU()
@@ -244,13 +250,17 @@ def main():
         r = ltn.variable('r', rate, add_batch_dim=False)
 
         f1 = Forall(ltn.diag([u1, i, r]), Equiv(likes([get_u_features(u1), get_i_features(i)]), r))
-        f2 = Forall([u1, u2, i], Implies(
-                                        And(
-                                            sim([u1, u2]),
-                                            likes([get_u_features(u1), get_i_features(i)])
-                                        ),
-                                        likes([get_u_features(u2), get_i_features(i)])
-                                        ))
+        f2 = Forall([u1, u2, i],
+                    Implies(
+                        And(
+                            sim([u1, u2]),
+                            likes([get_u_features(u1), get_i_features(i)])
+                        ),
+                        likes([get_u_features(u2), get_i_features(i)])
+                    ),
+                    mask_vars=[u1, u2],
+                    mask_fn=lambda mask_vars: ~torch.eq(mask_vars[0], mask_vars[1])
+                    )
         '''
         f4 = Forall([u1, u2, i1], Implies(
             And(
