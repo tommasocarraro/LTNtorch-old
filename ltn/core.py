@@ -156,6 +156,7 @@ def cross_grounding_values(input_groundings, flat_batch_dim=False):
             grounding = torch.repeat_interleave(grounding, repeats=vars_to_n_individuals[new_var],
                                                        dim=new_idx)
             vars_in_grounding.append(new_var)
+
         perm = [vars_in_grounding.index(var) for var in vars] + list(range(len(vars_in_grounding),
                                                                         len(grounding.shape)))
         grounding = grounding.permute(perm)
