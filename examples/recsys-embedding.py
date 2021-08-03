@@ -343,7 +343,7 @@ def main():
             loss.backward()
             optimizer.step()
             train_loss += loss.item()
-            predictions = likes_nn.model([users[uid].float(), items[iid].float()]).detach().cpu().numpy().flatten()
+            predictions = likes.model([uid, iid]).detach().cpu().numpy()
             tr_mean_mae += compute_mae(predictions * 4 + 1, rate * 4 + 1)
             tr_mean_rmse += compute_rmse(predictions * 4 + 1, rate * 4 + 1)
         train_loss = train_loss / len(train_loader)
@@ -357,7 +357,7 @@ def main():
             sat_agg = axioms(uid, iid, rate)
             mean_sat_test += sat_agg.item()
             # compute rating prediction metrics
-            predictions = likes.model([users[uid].float(), items[iid].float()]).detach().cpu().numpy().flatten()
+            predictions = likes.model([uid, iid]).detach().cpu().numpy()
             mean_mae += compute_mae(predictions * 4 + 1, rate * 4 + 1)
             mean_rmse += compute_rmse(predictions * 4 + 1, rate * 4 + 1)
 
