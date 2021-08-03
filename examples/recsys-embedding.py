@@ -248,7 +248,7 @@ def main():
 
         axioms = [
             Forall(ltn.diag([u1, i, r]), Equiv(likes_nn([get_u_features(u1), get_i_features(i)]), r)),
-            Forall([u1, i], Implies(likes_nn([get_u_features(u1), get_i_features(i)]), likes([u1, i]))),
+            Forall([u1, i], Equiv(likes_nn([get_u_features(u1), get_i_features(i)]), likes([u1, i]))),
             Forall([u1, u2, i],
                    Implies(
                        And(
