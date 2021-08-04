@@ -250,6 +250,7 @@ def main():
     sim_items = sim_items.to(ltn.device)
     items = items.to(ltn.device)
     users = users.to(ltn.device)
+    item_popularity = item_popularity.to(ltn.device)
 
     # create Likes, Sim and Eq predicates
     likes_nn = ltn.Predicate(Likes()).to(ltn.device)
