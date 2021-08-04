@@ -295,9 +295,9 @@ def main():
         # TODO capire se queste similarita' sono organizzate bene all'interno del tensore
 
         axioms = [
-            Forall(ltn.diag([u1, i1, r]), Equiv(likes([u1, i1]), r)),
-            Forall([u1, i1], Implies(item_pop(i1), likes([u1, i1]))),
-            Forall([u1, i1], Equiv(likes_nn([get_u_features(u1), get_i_features(i1)]), likes([u1, i1])))
+            #Forall(ltn.diag([u1, i1, r]), Equiv(likes([u1, i1]), r)),
+            Forall([u1, i1], Implies(item_pop(i1), likes([u1, i1])))
+            #Forall([u1, i1], Equiv(likes_nn([get_u_features(u1), get_i_features(i1)]), likes([u1, i1])))
             ]
 
         '''
