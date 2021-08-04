@@ -296,42 +296,45 @@ def main():
 
         axioms = [
             Forall(ltn.diag([u1, i1, r]), Equiv(likes([u1, i1]), r)),
-            Forall([u1, i1], Equiv(likes_nn([get_u_features(u1), get_i_features(i1)]), likes([u1, i1]))),
-            Forall([u1, u2, i1],
-                   Implies(
-                       And(
-                           sim_u_rate([u1, u2]),
-                           likes([u1, i1])
-                       ),
-                       likes([u2, i1])
-                   ),
-                   mask_vars=[u1, u2],
-                   mask_fn=lambda mask_vars: ~torch.eq(mask_vars[0], mask_vars[1])
-                   ),
-            Forall([u1, u2, i1],
-                   Implies(
-                       And(
-                           sim_u_features([u1, u2]),
-                           likes([u1, i1])
-                       ),
-                       likes([u2, i1])
-                   ),
-                   mask_vars=[u1, u2],
-                   mask_fn=lambda mask_vars: ~torch.eq(mask_vars[0], mask_vars[1])
-                   ),
-            Forall([i1, i2, u1],
-                   Implies(
-                       And(
-                           sim_i_features([i1, i2]),
-                           likes([u1, i1])
-                       ),
-                       likes([u1, i2])
-                   ),
-                   mask_vars=[i1, i2],
-                   mask_fn=lambda mask_vars: ~torch.eq(mask_vars[0], mask_vars[1])
-                   ),
             Forall([u1, i1], Implies(item_pop(i1), likes([u1, i1])))
             ]
+
+        '''
+                    Forall([u1, i1], Equiv(likes_nn([get_u_features(u1), get_i_features(i1)]), likes([u1, i1]))),
+                    Forall([u1, u2, i1],
+                           Implies(
+                               And(
+                                   sim_u_rate([u1, u2]),
+                                   likes([u1, i1])
+                               ),
+                               likes([u2, i1])
+                           ),
+                           mask_vars=[u1, u2],
+                           mask_fn=lambda mask_vars: ~torch.eq(mask_vars[0], mask_vars[1])
+                           ),
+                    Forall([u1, u2, i1],
+                           Implies(
+                               And(
+                                   sim_u_features([u1, u2]),
+                                   likes([u1, i1])
+                               ),
+                               likes([u2, i1])
+                           ),
+                           mask_vars=[u1, u2],
+                           mask_fn=lambda mask_vars: ~torch.eq(mask_vars[0], mask_vars[1])
+                           ),
+                    Forall([i1, i2, u1],
+                           Implies(
+                               And(
+                                   sim_i_features([i1, i2]),
+                                   likes([u1, i1])
+                               ),
+                               likes([u1, i2])
+                           ),
+                           mask_vars=[i1, i2],
+                           mask_fn=lambda mask_vars: ~torch.eq(mask_vars[0], mask_vars[1])
+                           ),
+                    '''
 
         '''
         f2 = Forall([u1, u2, i],
