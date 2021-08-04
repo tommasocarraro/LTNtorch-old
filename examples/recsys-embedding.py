@@ -9,6 +9,20 @@ logging.basicConfig()
 logging.getLogger().setLevel(logging.DEBUG)
 logger = logging.getLogger(__name__)
 
+#  idee leonardo
+# TODO non fare 0.5 sulle similarita', bensi' fare il prodotto delle 2, cosi la similarita' delle cose in comune pesa quella sui rating
+# ad esempio, se abbiamo un solo film in comune e abbiamo lo stesso voto, da una parte siamo completamente uguali (sim
+# voti), dall'altra super dissimili (ognuno ha visto tanti film ma solo uno e' in comune). Non e' giusto usare 0.5 come
+# combinazione lineare. Meglio che il peso della similarita' dei seen pesi sulla similarita' dei rating
+# TODO togliere la feature sulla occupazione che secondo me non e' tanto informativa e rende solamente piu' sparso l'input
+# TODO calcolare la similarita' tra due item basandosi solo sui generi one-hot, non ha senso che due film siano simili per l'anno
+# in realta' ha senso
+# la similarita' non e' giusto che venga calcolata sulla base degli utenti in comune tra due film e sui rating dati da questi
+# TODO aggiungere la similarita' tra utenti sulla base di info anagrafiche ma senza la occupazione
+# TODO aggiungere le regole sui generi
+# TODO aggiungere la regola sulla popolarita', vista come la percentuale di utenti che hanno visto un film
+
+
 
 def prepare_dataset():
     ratings = pd.read_csv("datasets/ml-100k/u.data", sep='\t', header=None)
@@ -85,18 +99,19 @@ def prepare_dataset():
     # 0.3 to give less weight to the similarity based on the interactions.
     alpha = 0.50
     sim_users = torch.ones((n_users, n_users))
-    for i in range(seen_matrix.shape[0]):
-        expanded_user_interactions = seen_matrix[i].expand(n_users, n_items)
-        expanded_user_ratings = rate_matrix[i].expand(n_users, n_items)
-        cos_sim_user_interactions = torch.nn.functional.cosine_similarity(expanded_user_interactions, seen_matrix,
-                                                                          dim=1)
-        user_shared_items = expanded_user_interactions * seen_matrix
-        user_shared_ratings = expanded_user_ratings * user_shared_items
-        other_users_shared_ratings = rate_matrix * user_shared_items
-        cos_sim_user_ratings = torch.nn.functional.cosine_similarity(other_users_shared_ratings, user_shared_ratings,
-                                                                     dim=1)
-        final_cos_sim = alpha * cos_sim_user_interactions + (1 - alpha) * cos_sim_user_ratings
-        sim_users[i] = final_cos_sim
+    for u in range(seen_matrix.shape[0]):
+        exp_u_interactions = seen_matrix[u].expand(n_users, n_items)
+        exp_u_ratings = rate_matrix[u].expand(n_users, n_items)
+        cos_sim_user_interactions = torch.nn.functional.cosine_similarity(exp_u_interactions, seen_matrix, dim=1)
+        u_shared_items_w_others = exp_u_interactions * seen_matrix
+        u_shared_ratings_w_others = exp_u_ratings * u_shared_items_w_others
+        other_users_shared_ratings_w_u = rate_matrix * u_shared_items_w_others
+        cos_sim_user_ratings = torch.nn.functional.cosine_similarity(other_users_shared_ratings_w_u,
+                                                                     u_shared_ratings_w_others, dim=1)
+        # element-wise product of the two similarities in such a way that one similarity weights on the other
+        # and viceversa
+        final_cos_sim = cos_sim_user_interactions * cos_sim_user_ratings
+        sim_users[u] = final_cos_sim
 
     # pre-processing items
     items_info = items_info.drop(columns=['item', 'imdb_url', 'video_release_date', 'title'])
@@ -131,7 +146,7 @@ def prepare_dataset():
     # Drop column as it is now encoded
     users_info = users_info.drop('occupation', axis=1)
     # Join the encoded df
-    users_info = users_info.join(one_hot)
+    # users_info = users_info.join(one_hot)  removed the occupation from the dataframe
     # remove 'user' column
     users_info = users_info.drop(columns=['user', 'zip'])
 
@@ -151,7 +166,7 @@ class Likes(torch.nn.Module):
         super(Likes, self).__init__()
         self.elu = torch.nn.ELU()
         self.sigmoid = torch.nn.Sigmoid()
-        self.first_layer = torch.nn.Linear(54, 32)
+        self.first_layer = torch.nn.Linear(33, 32)
         self.second_layer = torch.nn.Linear(32, 16)
         self.third_layer = torch.nn.Linear(16, 1)
 
