@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 # TODO aggiungere la similarita' tra utenti sulla base di info anagrafiche ma senza la occupazione
 # TODO aggiungere le regole sui generi
 # TODO aggiungere la regola sulla popolarita', vista come la percentuale di utenti che hanno visto un film
-
+# TODO aggiungere similarita' tra utenti in maniera transitiva
 
 
 def prepare_dataset():
@@ -98,7 +98,7 @@ def prepare_dataset():
     # 5. the final similarity is computed by a linear combination of the two similarities, with alpha parameter set to
     # 0.3 to give less weight to the similarity based on the interactions.
     alpha = 0.50
-    sim_users = torch.ones((n_users, n_users))
+    sim_users_ratings = torch.ones((n_users, n_users))
     for u in range(seen_matrix.shape[0]):
         exp_u_interactions = seen_matrix[u].expand(n_users, n_items)
         exp_u_ratings = rate_matrix[u].expand(n_users, n_items)
@@ -111,7 +111,7 @@ def prepare_dataset():
         # element-wise product of the two similarities in such a way that one similarity weights on the other
         # and viceversa
         final_cos_sim = cos_sim_user_interactions * cos_sim_user_ratings
-        sim_users[u] = final_cos_sim
+        sim_users_ratings[u] = final_cos_sim
 
     # pre-processing items
     items_info = items_info.drop(columns=['item', 'imdb_url', 'video_release_date', 'title'])
@@ -150,8 +150,30 @@ def prepare_dataset():
     # remove 'user' column
     users_info = users_info.drop(columns=['user', 'zip'])
 
-    return ratings.to_numpy(), ratings_test.to_numpy(), seen_matrix, rate_matrix, sim_users, items_info.to_numpy(), \
-           users_info.to_numpy()
+    # convert user and items to numpy
+    items_info = torch.FloatTensor(items_info.to_numpy())
+    users_info = torch.FloatTensor(users_info.to_numpy())
+
+    # here, we compute the similarities between each pair of items in the dataset
+    sim_items = torch.ones((n_items, n_items))
+    for i in range(n_items):
+        exp_i_features = items_info[i].expand(items_info.shape)
+        cos_sim_item_features = torch.nn.functional.cosine_similarity(exp_i_features, items_info, dim=1)
+        sim_items[i] = cos_sim_item_features
+
+    # here, we compute the similarities between each pair of users in the dataset (based on the features)
+    sim_users_features = torch.ones((n_users, n_users))
+    for u in range(n_users):
+        exp_u_features = users_info[u].expand(users_info.shape)
+        cos_sim_user_features = torch.nn.functional.cosine_similarity(exp_u_features, users_info, dim=1)
+        sim_users_features[u] = cos_sim_user_features
+
+    # here, we compute the popularity of the movies of the dataset. The popularity of a movie is given by the
+    # percentage of users that have seen the movie
+    item_popularity = torch.mean(seen_matrix, dim=0)
+
+    return ratings.to_numpy(), ratings_test.to_numpy(), seen_matrix, rate_matrix, sim_users_ratings, sim_users_features, \
+           sim_items, items_info, users_info, item_popularity
 
 
 class Likes(torch.nn.Module):
@@ -207,7 +229,8 @@ class DataLoader(object):
 
 def main():
     # prepare dataset for recommendation
-    ratings, ratings_test, seen_matrix, rate_matrix, sim_users, items, users = prepare_dataset()
+    ratings, ratings_test, seen_matrix, rate_matrix, sim_users_ratings, sim_users_features, sim_items, items, users, \
+    item_popularity = prepare_dataset()
 
     like_embedding = torch.randn((users.shape[0], items.shape[0])).to(ltn.device)
 
@@ -222,15 +245,23 @@ def main():
     # rate_matrix = torch.tensor(rate_matrix.todense()).to(ltn.device)  # this problem has to be solved, for the moment it
     # could work since data is small, the problem is that csr matrix does not work well with PyTorch tensors and
     # PyTorch sparse is still in beta
-    sim_users = sim_users.to(ltn.device)
-    items = torch.tensor(items).to(ltn.device)
-    users = torch.tensor(users).to(ltn.device)
+    sim_users_features = sim_users_features.to(ltn.device)
+    sim_users_ratings = sim_users_ratings.to(ltn.device)
+    sim_items = sim_items.to(ltn.device)
+    items = items.to(ltn.device)
+    users = users.to(ltn.device)
 
     # create Likes, Sim and Eq predicates
     likes_nn = ltn.Predicate(Likes()).to(ltn.device)
     likes = ltn.Predicate(lambda_func=lambda args: torch.sigmoid(like_embedding[args[0], args[1]])).to(ltn.device)
     # this measures the similarity between two users' behavioral vectors (vectors containing users' preferences)
-    sim = ltn.Predicate(lambda_func=lambda args: sim_users[args[0], args[1]]).to(ltn.device)
+    sim_u_rate = ltn.Predicate(lambda_func=lambda args: sim_users_ratings[args[0], args[1]]).to(ltn.device)
+    # this measures the similarity between two users' features
+    sim_u_features = ltn.Predicate(lambda_func=lambda args: sim_users_features[args[0], args[1]]).to(ltn.device)
+    # this measures the similarity between two items' features
+    sim_i_features = ltn.Predicate(lambda_func=lambda args: sim_items[args[0], args[1]]).to(ltn.device)
+    # this measures the popularity of an item
+    item_pop = ltn.Predicate(lambda_func=lambda arg: item_popularity[arg[0]]).to(ltn.device)
     # this measures the similarity between two truth values in [0., 1.]
     eq = ltn.Predicate(lambda_func=lambda args: torch.exp(-torch.norm(torch.unsqueeze(args[0] - args[1], 1), dim=1)))
 
@@ -257,24 +288,48 @@ def main():
     def axioms(uid, iid, rate):
         u1 = ltn.variable('u1', uid, add_batch_dim=False)
         u2 = ltn.variable('u2', uid, add_batch_dim=False)
-        i = ltn.variable('i', iid, add_batch_dim=False)
+        i1 = ltn.variable('i1', iid, add_batch_dim=False)
+        i2 = ltn.variable('i2', iid, add_batch_dim=False)
         r = ltn.variable('r', rate, add_batch_dim=False)
         # TODO capire se queste similarita' sono organizzate bene all'interno del tensore
 
         axioms = [
-            Forall(ltn.diag([u1, i, r]), Equiv(likes([u1, i]), r)),
-            Forall([u1, i], Equiv(likes_nn([get_u_features(u1), get_i_features(i)]), likes([u1, i]))),
-            Forall([u1, u2, i],
+            Forall(ltn.diag([u1, i1, r]), Equiv(likes([u1, i1]), r)),
+            Forall([u1, i1], Equiv(likes_nn([get_u_features(u1), get_i_features(i1)]), likes([u1, i1]))),
+            Forall([u1, u2, i1],
                    Implies(
                        And(
-                           sim([u1, u2]),
-                           likes([u1, i])
+                           sim_u_rate([u1, u2]),
+                           likes([u1, i1])
                        ),
-                       likes([u2, i])
+                       likes([u2, i1])
                    ),
                    mask_vars=[u1, u2],
                    mask_fn=lambda mask_vars: ~torch.eq(mask_vars[0], mask_vars[1])
-                   )
+                   ),
+            Forall([u1, u2, i1],
+                   Implies(
+                       And(
+                           sim_u_features([u1, u2]),
+                           likes([u1, i1])
+                       ),
+                       likes([u2, i1])
+                   ),
+                   mask_vars=[u1, u2],
+                   mask_fn=lambda mask_vars: ~torch.eq(mask_vars[0], mask_vars[1])
+                   ),
+            Forall([i1, i2, u1],
+                   Implies(
+                       And(
+                           sim_i_features([i1, i2]),
+                           likes([u1, i1])
+                       ),
+                       likes([u1, i2])
+                   ),
+                   mask_vars=[i1, i2],
+                   mask_fn=lambda mask_vars: ~torch.eq(mask_vars[0], mask_vars[1])
+                   ),
+            Forall([u1, i1], Implies(item_pop(i1), likes([u1, i1])))
             ]
 
         '''
