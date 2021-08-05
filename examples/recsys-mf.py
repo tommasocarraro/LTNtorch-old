@@ -217,8 +217,8 @@ def main():
     item_popularity = prepare_dataset()
 
     # create DataLoader for the training and testing of the model
-    train_loader = DataLoader(ratings, 256, True)
-    test_loader = DataLoader(ratings_test, 256)
+    train_loader = DataLoader(ratings, 32, True)
+    test_loader = DataLoader(ratings_test, 32)
 
     sim_users_features = sim_users_features.to(ltn.device)
     sim_users_ratings = sim_users_ratings.to(ltn.device)
@@ -271,7 +271,7 @@ def main():
 
         axioms = [
             Forall(ltn.diag([u1, i1, r]), Equiv(likes([u1, i1]), r)),
-            #Forall([u1, i1], Implies(item_pop(i1), likes([u1, i1])))
+            Forall([u1, i1], Implies(item_pop(i1), likes([u1, i1])))
             #Forall([u1, i1], Equiv(likes_nn([get_u_features(u1), get_i_features(i1)]), likes([u1, i1])))
         ]
 
