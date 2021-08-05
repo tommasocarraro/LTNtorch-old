@@ -407,7 +407,7 @@ def main():
             sat_agg = axioms(uid, iid, rate)
             mean_sat_test += sat_agg.item()
             # compute rating prediction metrics
-            predictions = likes.model([torch.tensor(uid), torch.tensor(iid)]).detach().cpu().numpy()
+            predictions = likes.model([torch.tensor(uid).to(ltn.device), torch.tensor(iid).to(ltn.device)]).detach().cpu().numpy()
             mean_mae += compute_mae(predictions * 4 + 1, rate * 4 + 1)
             mean_rmse += compute_rmse(predictions * 4 + 1, rate * 4 + 1)
 
