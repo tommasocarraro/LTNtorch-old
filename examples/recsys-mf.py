@@ -393,7 +393,7 @@ def main():
             loss.backward()
             optimizer.step()
             train_loss += loss.item()
-            predictions = likes.model([torch.tensor(uid), torch.tensor(iid)]).detach().cpu().numpy()
+            predictions = likes.model([torch.tensor(uid).to(ltn.device), torch.tensor(iid).to(ltn.device)]).detach().cpu().numpy()
             tr_mean_mae += compute_mae(predictions * 4 + 1, rate * 4 + 1)
             tr_mean_rmse += compute_rmse(predictions * 4 + 1, rate * 4 + 1)
         train_loss = train_loss / len(train_loader)
