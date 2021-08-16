@@ -67,14 +67,15 @@ def variable(variable_name, individuals_seq, add_batch_dim=True):
     if variable_name.startswith("diag"):
         raise ValueError("Labels starting with diag are reserved.")
     if isinstance(individuals_seq, torch.Tensor):
-        # we ensure that the tensor will be a float tensor and not a double tensor
-        var = individuals_seq.float().to(ltn.device)
+        var = individuals_seq
     else:
-        # we ensure that the tensor will be a float tensor and not a double tensor
         var = torch.tensor(individuals_seq)
-        if isinstance(var, torch.DoubleTensor):
-            var = var.float()
-        var = var.to(ltn.device)
+
+    if isinstance(var, torch.DoubleTensor):
+        # we ensure that the tensor will be a float tensor and not a double tensor
+        var = var.float()
+
+    var = var.to(ltn.device)
 
     if len(var.shape) == 1 and add_batch_dim:
         # adds a dimension to transform the input in the correct shape to work with LTN
