@@ -162,11 +162,13 @@ def cross_grounding_values(input_groundings, flat_batch_dim=False):
         perm = [vars_in_grounding.index(var) for var in vars] + list(range(len(vars_in_grounding),
                                                                         len(grounding.shape)))
         grounding = grounding.permute(perm)
-        grounding.free_variables = vars
+
         if flat_batch_dim:
             #  this adds the batch dimension if there is not, for example for the constants
             shape_list = [-1] + list(grounding.shape[len(vars_in_grounding)::])
             grounding = torch.reshape(grounding, shape=tuple(shape_list))
+
+        grounding.free_variables = vars
         crossed_groundings.append(grounding)
 
     return crossed_groundings, vars, n_individuals_per_var
