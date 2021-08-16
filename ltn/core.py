@@ -3,6 +3,7 @@ from torch import nn
 import numpy as np
 import warnings
 import ltn
+import copy
 
 # TODO vedere se mettere controlli sulle shape di input ai predicati, se matchano con la dim del primo strato
 # TODO rivedere il discorso active_doms, perche' non mi piace (sistemato, in teoria)
@@ -67,7 +68,7 @@ def variable(variable_name, individuals_seq, add_batch_dim=True):
     if variable_name.startswith("diag"):
         raise ValueError("Labels starting with diag are reserved.")
     if isinstance(individuals_seq, torch.Tensor):
-        var = individuals_seq
+        var = copy.deepcopy(individuals_seq)
     else:
         var = torch.tensor(individuals_seq)
 
