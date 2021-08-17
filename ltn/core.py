@@ -12,6 +12,8 @@ import copy
 # TODO nei tutorial si parla di domains invece che groundings. Pensare se si puo' sistemare
 # TODO provare a usare il lambda layer per implementare le variabili proposizionali, con lambda_func che fa il clamp
 # TODO variabile proposizionale puo' essere usata la logistica per fare il clamp
+# TODO vedere se si riesce a sistemare il discorso delle free_variables creando degli oggetti apposta. Ad esempio
+# TODO ltn element che contiene un tensor, che e' il grounding e poi le free variables associate
 
 
 def constant(value, trainable=False):
