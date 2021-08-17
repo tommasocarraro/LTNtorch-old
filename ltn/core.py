@@ -52,6 +52,13 @@ class Grounding(object):
             return self.tensor.size(dim)
         return self.tensor.shape
 
+    def copy(self):
+        """
+        This function return a deep copy of the Grounding.
+        :return: deep copy of the Grounding
+        """
+        return Grounding(self.tensor, self.free_variables, self.latent_variable)
+
 
 def constant(value, trainable=False):
     """Function that creates an LTN constant.
@@ -177,7 +184,7 @@ def cross_grounding_values(input_groundings, flat_batch_dim=False):
         output tensor has size [3, 2, 2], if flatten_dim0 is set to True, its size becomes [6, 2]. In other words, it
         removes the batch dimensions.
     """
-    input_groundings = [copy.deepcopy(g) for g in input_groundings]
+    input_groundings = [g.copy() for g in input_groundings]
     vars_to_n_individuals = {}
     for grounding in input_groundings:
         if grounding.free_variables:
