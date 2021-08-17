@@ -13,7 +13,44 @@ import copy
 # TODO provare a usare il lambda layer per implementare le variabili proposizionali, con lambda_func che fa il clamp
 # TODO variabile proposizionale puo' essere usata la logistica per fare il clamp
 # TODO vedere se si riesce a sistemare il discorso delle free_variables creando degli oggetti apposta. Ad esempio
-# TODO ltn element che contiene un tensor, che e' il grounding e poi le free variables associate
+# TODO commentare di nuovo tutto sulla base delle nuove modifiche
+
+
+class Grounding(object):
+    """
+    This class is a wrapper for every LTN grounding. An LTN grounding is represented by a tensor which dimensions are
+    associated with the free variables contained in the LTN grounding.
+
+    Attributes:
+        tensor: this is a PyTorch tensor containing the grounding of the LTN element. An LTN element could be a term or
+        a formula;
+        free_variables: this a list of strings containing the name of the free variables contained in the LTN grounding.
+
+    Args:
+        tensor: see `tensor` attribute;
+        free_variables: see `free_variables` attribute
+    """
+    def __init__(self, tensor, free_variables=[], latent_variable=None):
+        self.tensor = tensor
+        self.free_variables = free_variables
+        self.latent_variable = latent_variable
+
+    def __repr__(self):
+        return str(self.tensor)
+
+    def to(self, device):
+        return self.tensor.to(device)
+
+    def size(self, dim=None):
+        """
+        This function returns the size of the given dimension for `self.tensor` is `dim` is given, otherwise it returns
+        the entire shape of `self.tensor`.
+        :param dim: the dimension for which the size has to extracted
+        :return: the shape of `self.tensor` based on `dim` parameter
+        """
+        if dim is not None:
+            return self.tensor.size(dim)
+        return self.tensor.shape
 
 
 def constant(value, trainable=False):
@@ -38,7 +75,7 @@ def constant(value, trainable=False):
     # we ensure that the tensor will be a float tensor and not a double tensor
     const = torch.tensor(value).float().to(ltn.device)
     const.requires_grad = trainable
-    return const
+    return Grounding(const, [])
 
 
 def variable(variable_name, individuals_seq, add_batch_dim=True):
@@ -86,10 +123,7 @@ def variable(variable_name, individuals_seq, add_batch_dim=True):
         # for example, [3, 1, 2] is transformed into [[3], [1], [2]]
         var = var.view(var.shape[0], 1)
 
-    var.free_variables = [variable_name]
-    var.latent_variable = variable_name
-
-    return var
+    return Grounding(var, [variable_name], variable_name)
 
 
 def propositional_variable(truth_value, trainable=False):
@@ -143,32 +177,34 @@ def cross_grounding_values(input_groundings, flat_batch_dim=False):
         output tensor has size [3, 2, 2], if flatten_dim0 is set to True, its size becomes [6, 2]. In other words, it
         removes the batch dimensions.
     """
+    input_groundings = [copy.deepcopy(g) for g in input_groundings]
     vars_to_n_individuals = {}
     for grounding in input_groundings:
-        if hasattr(grounding, "free_variables"):
+        if grounding.free_variables:
             for var in grounding.free_variables:
                 vars_to_n_individuals[var] = get_n_individuals_of_var(grounding, var)
     vars = list(vars_to_n_individuals.keys())
     n_individuals_per_var = list(vars_to_n_individuals.values())
     crossed_groundings = []
     for grounding in input_groundings:
-        vars_in_grounding = list(grounding.free_variables) if hasattr(grounding, "free_variables") else []
+        vars_in_grounding = grounding.free_variables
         vars_not_in_grounding = list(set(vars).difference(vars_in_grounding))
         for new_var in vars_not_in_grounding:
             new_idx = len(vars_in_grounding)
-            grounding = torch.unsqueeze(grounding, dim=new_idx)
-            grounding = torch.repeat_interleave(grounding, repeats=vars_to_n_individuals[new_var],
+            grounding.tensor = torch.unsqueeze(grounding.tensor, dim=new_idx)
+            grounding.tensor = torch.repeat_interleave(grounding.tensor, repeats=vars_to_n_individuals[new_var],
                                                        dim=new_idx)
             vars_in_grounding.append(new_var)
 
         perm = [vars_in_grounding.index(var) for var in vars] + list(range(len(vars_in_grounding),
-                                                                        len(grounding.shape)))
-        grounding = grounding.permute(perm)
+                                                                        len(grounding.size())))
+
+        grounding.tensor = grounding.tensor.permute(perm)
 
         if flat_batch_dim:
             #  this adds the batch dimension if there is not, for example for the constants
-            shape_list = [-1] + list(grounding.shape[len(vars_in_grounding)::])
-            grounding = torch.reshape(grounding, shape=tuple(shape_list))
+            shape_list = [-1] + list(grounding.tensor.shape[len(vars_in_grounding)::])
+            grounding.tensor = torch.reshape(grounding.tensor, shape=tuple(shape_list))
 
         grounding.free_variables = vars
         crossed_groundings.append(grounding)
@@ -260,7 +296,7 @@ class Predicate(nn.Module):
             a `torch.Tensor` of truth values representing the result of the predicate, with dimensions s.t.
             each variable corresponds to one axis.
         """
-        assert isinstance(inputs, (list, torch.Tensor)), "The inputs parameter should be a list of tensors or a tensor."
+        assert isinstance(inputs, (list, Grounding)), "The inputs parameter should be a list of Grounding or a Grounding."
         if isinstance(inputs, list):
             inputs, vars, n_individuals_per_var = cross_grounding_values(inputs, flat_batch_dim=True)
         else:
@@ -270,19 +306,19 @@ class Predicate(nn.Module):
         outputs = None  # outputs initialization
         if self.model_type == 'model' or self.model_type == 'lambda':
             # the management of the input is left to the model or the lambda function
+            inputs = [x.tensor for x in inputs]
             outputs = self.model(inputs, *args, **kwargs)
 
         if self.model_type == 'mlp':
             # if the model is an mlp directly instantiated by LTN, it is necessary to flat the input
-            flat_inputs = [torch.flatten(x, start_dim=1) for x in inputs]  # if len(x.shape) > 1 else x
+            flat_inputs = [torch.flatten(x.tensor, start_dim=1) for x in inputs]  # if len(x.shape) > 1 else x
             inputs = torch.cat(flat_inputs, dim=1) if len(flat_inputs) > 1 else flat_inputs[0]
             outputs = self.model(inputs, *args, **kwargs)
 
         outputs = torch.reshape(outputs, tuple(n_individuals_per_var))
         outputs = outputs.float()
 
-        outputs.free_variables = vars
-        return outputs
+        return Grounding(outputs, vars)
 
     @staticmethod
     def lambda_operation(lambda_function):
@@ -385,7 +421,7 @@ class Function(nn.Module):
             a `torch.Tensor` of output values (each output is a tensor too), with dimensions s.t. each variable
             corresponds to one axis.
         """
-        assert isinstance(inputs, (list, torch.Tensor)), "The inputs parameter should be a list of tensors or a tensor."
+        assert isinstance(inputs, (list, Grounding)), "The inputs parameter should be a list of Grounding or a Grounding."
 
         if isinstance(inputs, list):
             inputs, vars, n_individuals_per_var = cross_grounding_values(inputs, flat_batch_dim=True)
@@ -395,18 +431,18 @@ class Function(nn.Module):
 
         outputs = None
         if self.model_type == 'model' or self.model_type == 'lambda':
+            inputs = [x.tensor for x in inputs]
             outputs = self.model(inputs, *args, **kwargs)
 
         if self.model_type == 'mlp':
-            flat_inputs = [torch.flatten(x, start_dim=1) for x in inputs]
+            flat_inputs = [torch.flatten(x.tensor, start_dim=1) for x in inputs]
             inputs = torch.cat(flat_inputs, dim=1) if len(flat_inputs) > 1 else flat_inputs[0]
             outputs = self.model(inputs, *args, **kwargs)
 
         outputs = torch.reshape(outputs, tuple(n_individuals_per_var + list(outputs.shape[1::])))
-
         outputs = outputs.float()
-        outputs.free_variables = vars
-        return outputs
+
+        return Grounding(outputs, vars)
 
     @staticmethod
     def lambda_operation(lambda_function):
@@ -467,7 +503,7 @@ def diag(variables_groundings):
     assert len(variables_groundings) > 1, "It is not possible to perform diagonal quantification on a single variable." \
                                           " At least two variables have to be given."
     # check if variables have the same number of individuals
-    n_individuals = [var.shape[0] for var in variables_groundings]
+    n_individuals = [var.tensor.shape[0] for var in variables_groundings]
     assert len(set(n_individuals)) == 1, "The given variables have a different number of individuals between each other." \
                                          " It is not possible to perform diagonal quantification between variables that" \
                                          " have a different number of individuals."
@@ -525,8 +561,7 @@ class WrapperConnective:
         # TODO capire a cosa serviva l'eccezione qui
         input_groundings, vars, _ = cross_grounding_values(input_groundings)
         output = self.connective_operator(*input_groundings)
-        output.free_variables = vars
-        return output
+        return Grounding(output, vars)
 
 
 class WrapperQuantifier:
@@ -573,16 +608,16 @@ class WrapperQuantifier:
             formula_grounding, mask = compute_mask(formula_grounding, mask_vars, mask_fn, aggregation_vars)
             # we apply the mask to the grounding of the formula
             # the idea is to put NaN values where the mask is zero, while the rest of the grounding is kept untouched
-            if formula_grounding.shape != mask.shape:
+            if formula_grounding.size() != mask.shape:
                 # I have to rearrange the size of the mask if it has a different size respect to the formula_grounding
-                n_new_dims = len(formula_grounding.shape) - len(mask.shape)
+                n_new_dims = len(formula_grounding.size()) - len(mask.shape)
                 mask = mask.reshape(mask.shape + (1,) * n_new_dims)
-                mask = mask.expand(formula_grounding.shape)
+                mask = mask.expand(formula_grounding.size())
 
             masked_formula_grounding = torch.where(
                 ~mask,
                 np.nan,
-                formula_grounding.double()
+                formula_grounding.tensor.double()
             )
             # we perform the desired quantification after the mask has been applied
             aggregation_dims = [formula_grounding.free_variables.index(var) for var in aggregation_vars]
@@ -605,9 +640,9 @@ class WrapperQuantifier:
             aggregation_dims = [formula_grounding.free_variables.index(var) for var in aggregation_vars]
             output = self.aggregation_operator(formula_grounding, dim=tuple(aggregation_dims), **kwargs)
         # update the free variables on the output groundings based on which variables have been aggregated
-        output.free_variables = [var for var in formula_grounding.free_variables if var not in aggregation_vars]
+        new_free_variables = [var for var in formula_grounding.free_variables if var not in aggregation_vars]
         undiag(variables_groundings)
-        return output
+        return Grounding(output, new_free_variables)
 
 
 def compute_mask(formula_grounding, mask_vars, mask_fn, aggregation_vars):
@@ -638,7 +673,7 @@ def compute_mask(formula_grounding, mask_vars, mask_fn, aggregation_vars):
     mask = mask_fn(crossed_mask_vars)  # creates the mask
     mask = torch.reshape(mask, tuple(n_individuals_per_var))  # reshape the mask in such a way that it is compatible with formula_grounding
     # 4. shape it according to the var order in formula_grounding
-    mask.free_variables = vars_order_in_mask  # adds the free variables to the mask
+    mask = Grounding(mask, vars_order_in_mask)  # adds the free variables to the mask
     mask = transpose_vars(mask, vars_in_mask_not_aggregated + vars_in_mask_aggregated)
 
     return formula_grounding, mask
@@ -652,6 +687,6 @@ def transpose_vars(input_grounding, new_vars_order):
     :return: the input grounding transposed according to the order in `new_vars_order`.
     """
     perm = [input_grounding.free_variables.index(var) for var in new_vars_order]
-    input_grounding = torch.permute(input_grounding, perm)
+    input_grounding.tensor = torch.permute(input_grounding.tensor, perm)
     input_grounding.free_variables = new_vars_order
     return input_grounding
