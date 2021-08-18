@@ -91,7 +91,7 @@ def main():
 
     # non-trainable predicate which measures the euclidean distance between two points. More the points are near each
     # other and more the value of the predicate will be near 1 (the truth).
-    eucl_dist = lambda x, y: torch.unsqueeze(torch.norm(x - y, dim=1), dim=1)  # function measuring euclidian distance
+    eucl_dist = lambda x, y: torch.unsqueeze(torch.norm(x.tensor - y.tensor, dim=1), dim=1)  # function measuring euclidian distance
 
     # this function defines the knowledge base containing the axioms that are used to train the model
     # the objective is to maximize the satisfaction level of this knowledge base
@@ -108,7 +108,7 @@ def main():
                    mask_vars=[x, y],
                    mask_fn=lambda mask_vars: eucl_dist(mask_vars[0], mask_vars[1]) > distant_threshold)
         ]
-        axioms = torch.stack(axioms)
+        axioms = torch.stack(ltn.Grounding.convert_groundings_to_tensors(axioms))
         sat_level = formula_aggregator(axioms, dim=0)
         return sat_level
 

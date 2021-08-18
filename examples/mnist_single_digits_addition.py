@@ -115,11 +115,11 @@ def main():
                 [d1, d2],
                 And(Digit([images_x, d1]), Digit([images_y, d2])),
                 mask_vars=[d1, d2, labels_z],
-                mask_fn=lambda vars: torch.eq(vars[0] + vars[1], vars[2]),
+                mask_fn=lambda vars: torch.eq(vars[0].tensor + vars[1].tensor, vars[2].tensor),
                 p=p_schedule
             ),
             p=2
-        )
+        ).tensor
 
     # # Training
     #

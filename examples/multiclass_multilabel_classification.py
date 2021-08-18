@@ -147,7 +147,7 @@ def main():
             Forall(x, Not(And(p([x, class_blue], training), p([x, class_orange], training)))),
             Forall(x, Not(And(p([x, class_male], training), p([x, class_female], training))))
         ]
-        axioms = torch.stack(axioms)
+        axioms = torch.stack(ltn.Grounding.convert_groundings_to_tensors(axioms))
         sat_level = formula_aggregator(axioms, dim=0)
         return sat_level
 
@@ -208,17 +208,17 @@ def main():
     # represents the truth value of the formula
     def phi1(features):
         x = ltn.variable("x", features)
-        return Forall(x, Implies(p([x, class_blue]), Not(p([x, class_orange]))), p=5)
+        return Forall(x, Implies(p([x, class_blue]), Not(p([x, class_orange]))), p=5).tensor
 
     # it returns the satisfaction level of the formula phi2 (querying)
     def phi2(features):
         x = ltn.variable("x", features)
-        return Forall(x, Implies(p([x, class_blue]), p([x, class_orange])), p=5)
+        return Forall(x, Implies(p([x, class_blue]), p([x, class_orange])), p=5).tensor
 
     # it returns the satisfaction level of the formula phi3 (querying)
     def phi3(features):
         x = ltn.variable("x", features)
-        return Forall(x, Implies(p([x, class_blue]), p([x, class_male])), p=5)
+        return Forall(x, Implies(p([x, class_blue]), p([x, class_male])), p=5).tensor
 
     optimizer = torch.optim.Adam(p.parameters(), lr=0.001)
 

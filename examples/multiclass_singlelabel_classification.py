@@ -118,7 +118,7 @@ def main():
             Forall(x_B, p([x_B, class_B], training=training)),
             Forall(x_C, p([x_C, class_C], training=training))
         ]
-        axioms = torch.stack(axioms)
+        axioms = torch.stack(ltn.Grounding.convert_groundings_to_tensors(axioms))
         sat_level = formula_aggregator(axioms, dim=0)
         return sat_level
 

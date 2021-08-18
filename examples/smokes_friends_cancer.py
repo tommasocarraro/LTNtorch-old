@@ -53,8 +53,8 @@ def main():
     def axioms(p_exists):
         # variables which represents all the people
         # since the embeddings change during the training, we need to re-istantiate these two variables at every step
-        p = ltn.variable("p", torch.stack(list(g.values())))
-        q = ltn.variable("q", torch.stack(list(g.values())))
+        p = ltn.variable("p", torch.stack(list(ltn.Grounding.convert_groundings_to_tensors(g.values()))))
+        q = ltn.variable("q", torch.stack(list(ltn.Grounding.convert_groundings_to_tensors(g.values()))))
         axioms = []
 
         # Friends: knowledge incomplete in that
@@ -92,25 +92,26 @@ def main():
         axioms.append(Forall(p, Implies(Not(Smokes(p)), Not(Cancer(p)))))
 
         # computing sat_level
+        axioms = ltn.Grounding.convert_groundings_to_tensors(axioms)
         axioms = torch.stack([torch.squeeze(ax) for ax in axioms])
         sat_level = formula_aggregator(axioms, dim=0)
         return sat_level
 
     # this function returns the satisfaction level of the logical formula phi 1
     def phi1():
-        p = ltn.variable("p", torch.stack(list(g.values())))
+        p = ltn.variable("p", torch.stack(list(ltn.Grounding.convert_groundings_to_tensors(g.values()))))
         return Forall(p, Implies(Cancer(p), Smokes(p)), p=5)
 
     # this function returns the satisfaction level of the logical formula phi2
     def phi2():
-        p = ltn.variable("p", torch.stack(list(g.values())))
-        q = ltn.variable("q", torch.stack(list(g.values())))
+        p = ltn.variable("p", torch.stack(list(ltn.Grounding.convert_groundings_to_tensors(g.values()))))
+        q = ltn.variable("q", torch.stack(list(ltn.Grounding.convert_groundings_to_tensors(g.values()))))
         return Forall([p, q], Implies(Or(Cancer(p), Cancer(q)), Friends([p, q])), p=5)
 
     # # Training
 
     # these are all the parameters that the optimizer has to learn
-    params = list(Smokes.parameters()) + list(Friends.parameters()) + list(Cancer.parameters()) + list(g.values())
+    params = list(Smokes.parameters()) + list(Friends.parameters()) + list(Cancer.parameters()) + list(ltn.Grounding.convert_groundings_to_tensors(g.values()))
     optimizer = torch.optim.Adam(params, lr=0.001)
 
     for epoch in range(1000):

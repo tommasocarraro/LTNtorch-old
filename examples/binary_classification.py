@@ -86,7 +86,7 @@ def main():
             Forall(x_not_A, Not(A(x_not_A)))  # we force the negation of the predicate A to be true for every negative
             # example
         ]
-        axioms = torch.stack(axioms)  # we stack the results of the axioms and use the formula aggregator to aggregate
+        axioms = torch.stack(ltn.Grounding.convert_groundings_to_tensors(axioms))  # we stack the results of the axioms and use the formula aggregator to aggregate
         # the results
         sat_level = formula_aggregator(axioms, dim=0)  # the aggregation of the formulas in the knowledge base returns a
         # value in [0, 1] which can be seen as a satisfaction level of the knowledge base
