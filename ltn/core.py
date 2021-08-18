@@ -632,14 +632,14 @@ class WrapperQuantifier:
             formula_grounding, mask = compute_mask(formula_grounding, mask_vars, mask_fn, aggregation_vars)
             # we apply the mask to the grounding of the formula
             # the idea is to put NaN values where the mask is zero, while the rest of the grounding is kept untouched
-            if formula_grounding.size() != mask.shape:
+            if formula_grounding.size() != mask.size():
                 # I have to rearrange the size of the mask if it has a different size respect to the formula_grounding
-                n_new_dims = len(formula_grounding.size()) - len(mask.shape)
-                mask = mask.reshape(mask.shape + (1,) * n_new_dims)
+                n_new_dims = len(formula_grounding.size()) - len(mask.size())
+                mask = mask.reshape(mask.size() + (1,) * n_new_dims)
                 mask = mask.expand(formula_grounding.size())
 
             masked_formula_grounding = torch.where(
-                ~mask,
+                ~mask.tensor,
                 np.nan,
                 formula_grounding.tensor.double()
             )
