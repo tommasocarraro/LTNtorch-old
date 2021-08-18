@@ -203,7 +203,7 @@ def cross_grounding_values(input_groundings, flat_batch_dim=False):
         output tensor has size [3, 2, 2], if flatten_dim0 is set to True, its size becomes [6, 2]. In other words, it
         removes the batch dimension.
     """
-    input_groundings = [g.copy() for g in input_groundings]
+    input_groundings = [g.copy() if isinstance(g, Grounding) else g for g in input_groundings]
     vars_to_n_individuals = {}
     for grounding in input_groundings:
         if grounding.free_variables:
@@ -225,7 +225,10 @@ def cross_grounding_values(input_groundings, flat_batch_dim=False):
         perm = [vars_in_grounding.index(var) for var in vars] + list(range(len(vars_in_grounding),
                                                                         len(grounding.size())))
 
-        grounding.tensor = grounding.tensor.permute(perm)
+        if isinstance(grounding, Grounding):
+            grounding.tensor = grounding.tensor.permute(perm)
+        else:
+            grounding = grounding.permute(perm)
 
         if flat_batch_dim:
             #  this adds the batch dimension if there is not, for example for the constants
