@@ -5,15 +5,11 @@ import warnings
 import ltn
 import copy
 
-# TODO vedere se mettere controlli sulle shape di input ai predicati, se matchano con la dim del primo strato
-# TODO rivedere il discorso active_doms, perche' non mi piace (sistemato, in teoria)
-# TODO sistemare il fatto che diag vuole una lista, mettere una tupla come su LTN (capire come fare)
-# TODO mettere il .item() quando si calacolano le metriche per non avere problemi di memoria
 # TODO nei tutorial si parla di domains invece che groundings. Pensare se si puo' sistemare
 # TODO provare a usare il lambda layer per implementare le variabili proposizionali, con lambda_func che fa il clamp
 # TODO variabile proposizionale puo' essere usata la logistica per fare il clamp
-# TODO vedere se si riesce a sistemare il discorso delle free_variables creando degli oggetti apposta. Ad esempio
 # TODO commentare di nuovo tutto sulla base delle nuove modifiche
+# TODO pensare a estensione in cui una funzione puo' avere piu' di un output
 
 
 class Grounding(object):
@@ -24,7 +20,8 @@ class Grounding(object):
     Attributes:
         tensor: this is a PyTorch tensor containing the grounding of the LTN element. An LTN element could be a term or
         a formula;
-        free_variables: this a list of strings containing the name of the free variables contained in the LTN grounding.
+        free_variables: this is a list of strings containing the name of the free variables contained in the
+        LTN grounding.
 
     Args:
         tensor: see `tensor` attribute;
@@ -36,16 +33,24 @@ class Grounding(object):
         self.latent_variable = latent_variable
 
     def __repr__(self):
+        """
+        This method is defined to print the tensor contained in the Grounding.
+        :return: a string containing `self.tensor`
+        """
         return str(self.tensor)
 
     def to(self, device):
-        return self.tensor.to(device)
+        """
+        This function moves `self.tensor` to the device given in input
+        :param device: device where to put `self.tensor`
+        """
+        self.tensor = self.tensor.to(device)
 
     def size(self, dim=None):
         """
         This function returns the size of the given dimension for `self.tensor` is `dim` is given, otherwise it returns
         the entire shape of `self.tensor`.
-        :param dim: the dimension for which the size has to extracted
+        :param dim: the dimension for which the size has to be extracted
         :return: the shape of `self.tensor` based on `dim` parameter
         """
         if dim is not None:
@@ -54,10 +59,30 @@ class Grounding(object):
 
     def copy(self):
         """
-        This function return a deep copy of the Grounding.
+        This function returns a deep copy of the Grounding.
         :return: deep copy of the Grounding
         """
-        return Grounding(self.tensor, self.free_variables, self.latent_variable)
+        return Grounding(torch.clone(self.tensor), copy.deepcopy(self.free_variables), copy.deepcopy(self.latent_variable))
+
+    def item(self):
+        """
+        Invokes the item() method on `self.tensor`
+        :return: self.tensor.item()
+        """
+        return self.tensor.item()
+
+    @staticmethod
+    def convert_groundings_to_tensors(grounding_list):
+        """
+        This static method coverts the list of Grounding given in input in a list of PyTorch tensors by taking the
+        `tensor` attribute from each Grounding.
+        :param grounding_list: list of Grounding objects
+        :return: list of PyTorch tensors taken from the list of Grounding objects
+        """
+        check = [isinstance(x, Grounding) for x in grounding_list]
+        if len(check) != sum(check):
+            raise ValueError("The list of Grounding given in input contains some objects that are not of type Grounding")
+        return [x.tensor for x in grounding_list]
 
 
 def constant(value, trainable=False):
@@ -73,11 +98,7 @@ def constant(value, trainable=False):
         will be excluded from the gradient computation. If True, the constant is initialized using the value parameter.
         Defaults to False.
     Returns:
-        a `torch.FloatTensor` representing the LTN constant.
-        Removed: A dynamic attribute `free_variables` is added to the tensor. In LTN, this attribute contains the labels of the
-        free variables that appear on a constant, variable, formula, etc. `free_variables` is usually a list of labels
-        that associates each variable to one of the axes of the grounding of a formula. Since in this case we have a
-        constant, `free_variables` will be empty since a constant does not have free variables.
+        a `Grounding` representing the LTN constant.
     """
     # we ensure that the tensor will be a float tensor and not a double tensor
     const = torch.tensor(value).float().to(ltn.device)
@@ -97,7 +118,7 @@ def variable(variable_name, individuals_seq, add_batch_dim=True):
     Args:
         variable_name: it is a string containing the name of the variable, for example 'x'.
         individuals_seq: it is a list of individuals that becomes the grounding the LTN variable. Notice that each
-        individual in the sequence must have the same shape (i.e., must be of the same domain). Alternatively, it is
+        individual in the sequence must have the same shape (i.e., must belong to the same domain). Alternatively, it is
         possible to directly give a `torch.tensor`, which becomes the grounding of the variable.
         add_batch_dim: this is a boolean flag indicating whether the batch dimension has to be added to the variable or
         not. Since a variable represents a sequence of individuals, the batch dimension should be added if it is missed.
@@ -106,15 +127,13 @@ def variable(variable_name, individuals_seq, add_batch_dim=True):
         default value of this parameter is True. If this value is set to False and the input sequence has only one
         dimension, no batch dimension will be added. This could serve in rare cases.
     Returns:
-        a `torch.FloatTensor` representing the LTN variable, where axis 0 is related with the number of individuals in
-        the grounding of the variable. Like for the LTN constants, the dynamic attribute `free_variables` is added to
-        the LTN variable. Moreover, a dynamic attribute called latent_variable is added to the output too. This attribute
-        is used by LTN for performing diagonal quantification of the variables.
+        a `Grounding` representing the LTN variable, where axis 0 is related with the number of individuals in
+        the grounding of the variable.
     """
     if variable_name.startswith("diag"):
         raise ValueError("Labels starting with diag are reserved.")
     if isinstance(individuals_seq, torch.Tensor):
-        var = copy.deepcopy(individuals_seq)
+        var = torch.clone(individuals_seq)
     else:
         var = torch.tensor(individuals_seq)
 
@@ -134,7 +153,7 @@ def variable(variable_name, individuals_seq, add_batch_dim=True):
 
 
 def propositional_variable(truth_value, trainable=False):
-    """Returns a rank-0 Tensor with the given truth value, whose output has to be constrained in [0,1],
+    """Returns a rank-0 tensor with the given truth value, whose output has to be constrained in [0,1],
     that can be used as a propositional variable in LTN formulas.
 
     Args:
@@ -155,15 +174,15 @@ def propositional_variable(truth_value, trainable=False):
 
 
 def get_n_individuals_of_var(grounding, var):
-    """Returns the number of individuals of the variable var contained in the grounding given in input.
-    Here, var is needed to specify the axis of the variable in the input grounding (tensor).
+    """Returns the number of individuals of the variable `var` contained in the Grounding given in input.
+    Here, `var` is needed to specify the axis of the variable in the input Grounding (tensor).
     """
     return grounding.size(grounding.free_variables.index(var))
 
 
 def cross_grounding_values(input_groundings, flat_batch_dim=False):
     """
-    This function creates the combination of all the possible values of the groundings given in input. These are
+    This function creates the combination of all the possible values of the Groundings given in input. These are
     the groundings of logical symbols or any expression built on them. These symbols can be ltn variables, constants,
     functions, predicates, or any expression built on those.
 
@@ -182,7 +201,7 @@ def cross_grounding_values(input_groundings, flat_batch_dim=False):
         functions, predicates, or any expression built on those.
         flat_batch_dim: if True, it removes the first dimension from the output tensors and flat it. For example, if one
         output tensor has size [3, 2, 2], if flatten_dim0 is set to True, its size becomes [6, 2]. In other words, it
-        removes the batch dimensions.
+        removes the batch dimension.
     """
     input_groundings = [g.copy() for g in input_groundings]
     vars_to_n_individuals = {}
@@ -297,10 +316,10 @@ class Predicate(nn.Module):
         """Encapsulates the "self.model.forward()" to handle the ltn-broadcasting.
 
         Args:
-            inputs: list of tensors that are ltn terms (ltn variable, ltn constant or
+            inputs: list of tensors (Groundings) that are ltn terms (ltn variable, ltn constant or
                     output of a ltn function) for which the predicate has to be computed.
         Returns:
-            a `torch.Tensor` of truth values representing the result of the predicate, with dimensions s.t.
+            a `Grounding` of truth values representing the result of the predicate, with dimensions s.t.
             each variable corresponds to one axis.
         """
         assert isinstance(inputs, (list, Grounding)), "The inputs parameter should be a list of Grounding or a Grounding."
@@ -355,7 +374,6 @@ class Predicate(nn.Module):
 
 
 class Function(nn.Module):
-    # TODO pensare a estensione in cui una funzione puo' avere piu' di un output
     """Function class for LTN.
 
     An ltn function is a mathematical function (pre-defined or learnable) that maps
@@ -422,10 +440,10 @@ class Function(nn.Module):
         """Encapsulates the "self.model.forward()" to handle the ltn-broadcasting.
 
         Args:
-            inputs: list of tensors that are ltn terms (ltn variable, ltn constant or
+            inputs: list of tensors (Groundings) that are ltn terms (ltn variable, ltn constant or
                     output of a ltn function) for which the predicate has to be computed.
         Returns:
-            a `torch.Tensor` of output values (each output is a tensor too), with dimensions s.t. each variable
+            a `Grounding` of output values (each output is a tensor too), with dimensions s.t. each variable
             corresponds to one axis.
         """
         assert isinstance(inputs, (list, Grounding)), "The inputs parameter should be a list of Grounding or a Grounding."
@@ -453,7 +471,7 @@ class Function(nn.Module):
 
     @staticmethod
     def lambda_operation(lambda_function):
-        """It construct a simple and non-trainable mathematical operation using the lambda function given in input.
+        """It constructs a simple and non-trainable mathematical operation using the lambda function given in input.
         It is appropriate for small non-trainable mathematical operations."""
         model = LambdaModel(lambda_function)
         return model
@@ -500,10 +518,10 @@ def diag(variables_groundings):
     LTN computes only the "zipped" results when diagonal quantification is performed.
 
     Args:
-        variables_groundings: the grounding of the LTN variables for which the diagonal quantification has to be
-    performed
+        variables_groundings: the Grounding of the LTN variables for which the diagonal quantification has to be
+    performed.
     Returns:
-        the groundings of the variables given in input, where the attribute `free_variables` has been changed to allow
+        the Groundings of the variables given in input, where the attribute `free_variables` has been changed to allow
         the use of the diagonal quantification.
     """
     # check if more than one variable has been given to the function
@@ -532,9 +550,9 @@ def undiag(variables_groundings):
         ```
 
     Args:
-        variables_groundings: the grounding of the variables for which the diagonal setting has to be removed.
+        variables_groundings: the Grounding of the variables for which the diagonal setting has to be removed.
     Returns:
-        the same variable groundings given in input with the attribute `free_variables` changed in such a way that
+        the same variable Groundings given in input with the attribute `free_variables` changed in such a way that
         the diagonal setting has been removed.
     """
     for var in variables_groundings:
@@ -559,13 +577,12 @@ class WrapperConnective:
 
     def __call__(self, *input_groundings, **kwargs):
         """
-        It applies the selected fuzzy connective operator to the groundings given in input. To do so, it firstly
+        It applies the selected fuzzy connective operator to the Groundings given in input. To do so, it firstly
         broadcast the input groundings to make them compatible to apply the operator.
-        :param input_groundings: the groundings of expressions to which the fuzzy connective operator has to be applied.
-        :return: the grounding that is the result of the application of the fuzzy connective operator to the input
+        :param input_groundings: the Groundings of expressions to which the fuzzy connective operator has to be applied.
+        :return: the Grounding that is the result of the application of the fuzzy connective operator to the input
         groundings.
         """
-        # TODO capire a cosa serviva l'eccezione qui
         input_groundings, vars, _ = cross_grounding_values(input_groundings)
         output = self.connective_operator(*input_groundings)
         return Grounding(output, vars)
@@ -598,9 +615,9 @@ class WrapperQuantifier:
         that no guarded quantification has to be performed.
 
         Args:
-            variables_groundings: groundings of the variables on which the quantification has to be performed;
-            formula_grounding: grounding of the formula that has to be quantified;
-            mask_vars: grounding of the variables that are included in the guarded quantification condition;
+            variables_groundings: Groundings of the variables on which the quantification has to be performed;
+            formula_grounding: Grounding of the formula that has to be quantified;
+            mask_vars: Grounding of the variables that are included in the guarded quantification condition;
             mask_fn: function which implements the guarded quantification condition. The condition is based on the
             variables contained in `mask_vars`.
         """
@@ -654,14 +671,14 @@ class WrapperQuantifier:
 
 def compute_mask(formula_grounding, mask_vars, mask_fn, aggregation_vars):
     """
-    It computes the mask for performing the guarded quantification on the grounding of the formula given in input.
-    :param formula_grounding: grounding of the formula that has to be quantified;
-    :param mask_vars: grounding of the variables that are included in the guarded quantification condition;
+    It computes the mask for performing the guarded quantification on the Grounding of the formula given in input.
+    :param formula_grounding: Grounding of the formula that has to be quantified;
+    :param mask_vars: Grounding of the variables that are included in the guarded quantification condition;
     :param mask_fn: function which implements the guarded quantification condition;
     :param aggregation_vars: list of labels of the variables on which the quantification has to be performed.
     :return: a tuple where the first element is the grounding of the input formula transposed in such a way that the
     guarded variables are in the first dimensions, while the second element is the mask that has to be applied over
-    the grounding of the formula in order to perform the guarded quantification.
+    the Grounding of the formula in order to perform the guarded quantification.
     """
     # 1. cross formula_grounding with groundings of variables that are in the mask but not yet in the formula
     mask_vars_not_in_formula_grounding = [var for var in mask_vars
@@ -688,10 +705,10 @@ def compute_mask(formula_grounding, mask_vars, mask_fn, aggregation_vars):
 
 def transpose_vars(input_grounding, new_vars_order):
     """
-    It transposes the input grounding using the order of variables given in `new_vars_order`.
-    :param input_grounding: the grounding that has to be transposed.
-    :param new_vars_order: the order of variables to transpose the input grounding.
-    :return: the input grounding transposed according to the order in `new_vars_order`.
+    It transposes the input Grounding using the order of variables given in `new_vars_order`.
+    :param input_grounding: the Grounding that has to be transposed.
+    :param new_vars_order: the order of variables to transpose the input Grounding.
+    :return: the input Grounding transposed according to the order in `new_vars_order`.
     """
     perm = [input_grounding.free_variables.index(var) for var in new_vars_order]
     input_grounding.tensor = torch.permute(input_grounding.tensor, perm)

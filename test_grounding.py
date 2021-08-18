@@ -1,5 +1,6 @@
 import ltn
 import torch
+import numpy as np
 
 
 def main():
@@ -13,13 +14,16 @@ def main():
     Forall = ltn.WrapperQuantifier(ltn.fuzzy_ops.AggregPMeanError(p=2), quantification_type="forall")
     Exists = ltn.WrapperQuantifier(ltn.fuzzy_ops.AggregPMean(p=2), quantification_type="exists")
     p = ltn.Predicate(lambda_func=lambda arg: arg[0] > 5)
-    print(And(p(v1), p(v2)))
-    print(Implies(p(v1), p(v2)))
-    print(p(v1))
-    print(Not(p(v1)))
-    print(Or(p(v1), p(v2)))
-    print(Forall(v1, p(v1)))
-    print(Exists(v1, p(v1)))
+    _and = And(p(v1), p(v2))
+    _implies = Implies(p(v1), p(v2))
+    _not = Not(p(v1))
+    _or = Or(p(v1), p(v2))
+    _forall = Forall(v1, p(v1))
+    _exists = Exists(v1, p(v1))
+    # torch.stack wants tensors, so we need to convert the groundings to tensors
+    axioms = torch.stack(ltn.Grounding.convert_groundings_to_tensors([_forall, _exists]))
+
+    print(ltn.fuzzy_ops.AggregPMeanError(p=2)(axioms, dim=0))
 
 
 if __name__ == "__main__":

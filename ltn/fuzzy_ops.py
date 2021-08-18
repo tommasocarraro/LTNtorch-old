@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+from ltn import Grounding
 """
 This module of the LTN project contains the PyTorch implementation of some common fuzzy logic operators. Refer to the
 LTN paper for a detailed description of these operators (see the Appendix).
@@ -52,7 +53,9 @@ class NotStandard:
         :param x: the input truth value;
         :return: the standard negation of the input.
         """
-        return 1. - x.tensor
+        if isinstance(x, Grounding):
+            x = x.tensor
+        return 1. - x
 
 
 class NotGodel:
@@ -65,7 +68,8 @@ class NotGodel:
         :param x: the input truth value;
         :return: the Godel negation of the input.
         """
-        x = x.tensor
+        if isinstance(x, Grounding):
+            x = x.tensor
         zeros = torch.zeros_like(x)
         return torch.equal(x, zeros)
 
@@ -83,7 +87,11 @@ class AndMin:
         :param y: the truth value of the second input;
         :return: the Godel conjunction of the two inputs.
         """
-        return torch.minimum(x.tensor, y.tensor)
+        if isinstance(x, Grounding):
+            x = x.tensor
+        if isinstance(y, Grounding):
+            y = y.tensor
+        return torch.minimum(x, y)
 
 
 class AndProd:
@@ -107,7 +115,10 @@ class AndProd:
         :return: the Goguen conjunction of the two inputs.
         """
         stable = self.stable if stable is None else stable
-        x, y = x.tensor, y.tensor
+        if isinstance(x, Grounding):
+            x = x.tensor
+        if isinstance(y, Grounding):
+            y = y.tensor
         if stable:
             x, y = pi_0(x), pi_1(y)
         return torch.mul(x, y)
@@ -124,7 +135,10 @@ class AndLuk:
         :param y: the truth value of the second input.
         :return: the Lukasiewicz conjunction of the two inputs.
         """
-        x, y = x.tensor, y.tensor
+        if isinstance(x, Grounding):
+            x = x.tensor
+        if isinstance(y, Grounding):
+            y = y.tensor
         zeros = torch.zeros_like(x)
         return torch.maximum(x + y - 1., zeros)
 
@@ -142,7 +156,11 @@ class OrMax:
         :param y: the truth value of the second input.
         :return: the Goedel disjunction of the two inputs.
         """
-        return torch.maximum(x.tensor, y.tensor)
+        if isinstance(x, Grounding):
+            x = x.tensor
+        if isinstance(y, Grounding):
+            y = y.tensor
+        return torch.maximum(x, y)
 
 
 class OrProbSum:
@@ -166,7 +184,10 @@ class OrProbSum:
         :return: the Goguen disjunction of the two inputs.
         """
         stable = self.stable if stable is None else stable
-        x, y = x.tensor, y.tensor
+        if isinstance(x, Grounding):
+            x = x.tensor
+        if isinstance(y, Grounding):
+            y = y.tensor
         if stable:
             x, y = pi_0(x), pi_1(y)
         return x + y - torch.mul(x, y)
@@ -183,7 +204,10 @@ class OrLuk:
         :param y: the truth value of the second input.
         :return: the Lukasiewicz disjunction of the two inputs.
         """
-        x, y = x.tensor, y.tensor
+        if isinstance(x, Grounding):
+            x = x.tensor
+        if isinstance(y, Grounding):
+            y = y.tensor
         ones = torch.ones_like(x)
         return torch.minimum(x + y, ones)
 
@@ -201,7 +225,11 @@ class ImpliesGoedelStrong:
         :param y: the truth value of the second input.
         :return: the Goedel strong implication of the two inputs.
         """
-        return torch.maximum(1. - x.tensor, y.tensor)
+        if isinstance(x, Grounding):
+            x = x.tensor
+        if isinstance(y, Grounding):
+            y = y.tensor
+        return torch.maximum(1. - x, y)
 
 
 class ImpliesGoedelResiduated:
@@ -215,7 +243,10 @@ class ImpliesGoedelResiduated:
         :param y: the truth value of the second input.
         :return: the Goedel residuated implication of the two inputs.
         """
-        x, y = x.tensor, y.tensor
+        if isinstance(x, Grounding):
+            x = x.tensor
+        if isinstance(y, Grounding):
+            y = y.tensor
         return torch.where(torch.le(x, y), torch.ones_like(x), y)
 
 
@@ -239,7 +270,10 @@ class ImpliesGoguenStrong:
         :return: the Goguen strong implication of the two inputs.
         """
         stable = self.stable if stable is None else stable
-        x, y = x.tensor, y.tensor
+        if isinstance(x, Grounding):
+            x = x.tensor
+        if isinstance(y, Grounding):
+            y = y.tensor
         if stable:
             x, y = pi_0(x), pi_1(y)
         return 1. - x + torch.mul(x, y)
@@ -265,7 +299,10 @@ class ImpliesGoguenResiduated:
         :return: the Goguen residuated implication of the two inputs.
         """
         stable = self.stable if stable is None else stable
-        x, y = x.tensor, y.tensor
+        if isinstance(x, Grounding):
+            x = x.tensor
+        if isinstance(y, Grounding):
+            y = y.tensor
         if stable:
             x = pi_0(x)
         return torch.where(torch.le(x, y), torch.ones_like(x), torch.div(y, x))
@@ -282,7 +319,10 @@ class ImpliesLuk:
         :param y: the truth value of the second input.
         :return: the Lukasiewicz implication of the two inputs.
         """
-        x, y = x.tensor, y.tensor
+        if isinstance(x, Grounding):
+            x = x.tensor
+        if isinstance(y, Grounding):
+            y = y.tensor
         ones = torch.ones_like(x)
         return torch.minimum(1. - x + y, ones)
 
@@ -310,7 +350,10 @@ class Equiv:
         :param y: the truth value of the second input.
         :return: the fuzzy equivalence of the two inputs.
         """
-        x, y = x.tensor, y.tensor
+        if isinstance(x, Grounding):
+            x = x.tensor
+        if isinstance(y, Grounding):
+            y = y.tensor
         return self.and_op(self.implies_op(x, y), self.implies_op(y, x))
 
 # AGGREGATORS FOR QUANTIFIERS - only the aggregators introduced in the LTN paper are implemented
@@ -333,7 +376,9 @@ class AggregMin:
         :return: the result of the mean aggregation. The shape of the result depends on the variables that are used
         in the quantification (namely, the dimensions across which the aggregation has been computed).
         """
-        xs = torch.where(torch.eq(xs.tensor, np.nan), 1., xs.tensor.double())
+        if isinstance(xs, Grounding):
+            xs = xs.tensor
+        xs = torch.where(torch.eq(xs, np.nan), 1., xs.double())
         out = torch.min(xs.float(), dim=dim, keepdim=keepdim)
         if isinstance(out, tuple):
             out = out[0]
@@ -357,8 +402,10 @@ class AggregMean:
         :return: the result of the mean aggregation. The shape of the result depends on the variables that are used
         in the quantification (namely, the dimensions across which the aggregation has been computed).
         """
-        numerator = torch.nansum(xs.tensor, dim=dim, keepdim=keepdim)
-        denominator = torch.sum(~torch.isnan(xs.tensor), dim=dim, keepdim=keepdim)
+        if isinstance(xs, Grounding):
+            xs = xs.tensor
+        numerator = torch.nansum(xs, dim=dim, keepdim=keepdim)
+        denominator = torch.sum(~torch.isnan(xs), dim=dim, keepdim=keepdim)
         return torch.div(numerator, denominator)
 
 
@@ -395,7 +442,8 @@ class AggregPMean:
         """
         p = self.p if p is None else p
         stable = self.stable if stable is None else stable
-        xs = xs.tensor
+        if isinstance(xs, Grounding):
+            xs = xs.tensor
         if stable:
             xs = pi_0(xs)
         xs = torch.pow(xs, p)
@@ -437,7 +485,9 @@ class AggregPMeanError:
         """
         p = self.p if p is None else p
         stable = self.stable if stable is None else stable
-        xs = xs.tensor
+        if isinstance(xs, Grounding):  # inside an object of type Grounding there is the tensor we need
+            # for the computation
+            xs = xs.tensor
         if stable:
             xs = pi_1(xs)
         xs = torch.pow(1. - xs, p)
