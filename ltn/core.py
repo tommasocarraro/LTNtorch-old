@@ -643,7 +643,11 @@ def compute_mask(formula_grounding, mask_vars, mask_fn, aggregation_vars):
     # 4. shape it according to the var order in formula_grounding
     mask.free_variables = vars_order_in_mask  # adds the free variables to the mask
 
-    mask = transpose_vars(mask, vars_in_mask_not_aggregated + vars_in_mask_aggregated)
+    # check if all variable labels in new_vars_order are the same. If yes, there is a diagonal quantification and no
+    # transposition has to be performed
+    new_vars_order = vars_in_mask_not_aggregated + vars_in_mask_aggregated
+    if len(set(new_vars_order)) != 1:
+        mask = transpose_vars(mask, new_vars_order)
 
     return formula_grounding, mask
 
