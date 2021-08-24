@@ -633,7 +633,7 @@ def compute_mask(formula_grounding, mask_vars, mask_fn, aggregation_vars):
     new_vars_order = vars_in_mask_not_aggregated + vars_in_mask_aggregated + vars_not_in_mask
     # check if all variable labels in new_vars_order are the same. If yes, there is a diagonal quantification and no
     # transposition has to be performed
-    if len(set(new_vars_order)) == 1:
+    if len(set(new_vars_order)) != 1:
         formula_grounding = transpose_vars(formula_grounding, new_vars_order)
     # 3. compute the boolean mask from the masked vars
     crossed_mask_vars, vars_order_in_mask, n_individuals_per_var = cross_grounding_values(mask_vars,
