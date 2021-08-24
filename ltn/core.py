@@ -631,7 +631,10 @@ def compute_mask(formula_grounding, mask_vars, mask_fn, aggregation_vars):
     vars_in_mask_aggregated = [var for var in vars_in_mask if var in aggregation_vars]
     vars_not_in_mask = [var for var in formula_grounding.free_variables if var not in vars_in_mask]
     new_vars_order = vars_in_mask_not_aggregated + vars_in_mask_aggregated + vars_not_in_mask
-    formula_grounding = transpose_vars(formula_grounding, new_vars_order)
+    # check if all variable labels in new_vars_order are the same. If yes, there is a diagonal quantification and no
+    # transposition has to be performed
+    if len(set(new_vars_order)) == 1:
+        formula_grounding = transpose_vars(formula_grounding, new_vars_order)
     # 3. compute the boolean mask from the masked vars
     crossed_mask_vars, vars_order_in_mask, n_individuals_per_var = cross_grounding_values(mask_vars,
                                                                                           flat_batch_dim=True)
@@ -639,11 +642,8 @@ def compute_mask(formula_grounding, mask_vars, mask_fn, aggregation_vars):
     mask = torch.reshape(mask, tuple(n_individuals_per_var))  # reshape the mask in such a way that it is compatible with formula_grounding
     # 4. shape it according to the var order in formula_grounding
     mask.free_variables = vars_order_in_mask  # adds the free variables to the mask
-    new_vars_order = vars_in_mask_not_aggregated + vars_in_mask_aggregated
-    # check if all variable labels in new_vars_order are the same. If yes, there is a diagonal quantification and no
-    # transposition has to be performed
-    if len(set(new_vars_order)) == 1:
-        mask = transpose_vars(mask, new_vars_order)
+
+    mask = transpose_vars(mask, vars_in_mask_not_aggregated + vars_in_mask_aggregated)
 
     return formula_grounding, mask
 
