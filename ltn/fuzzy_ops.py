@@ -431,4 +431,9 @@ class AggregPMeanError:
         xs = torch.pow(1. - xs, p)
         numerator = torch.nansum(xs, dim=dim, keepdim=keepdim)
         denominator = torch.sum(~torch.isnan(xs), dim=dim, keepdim=keepdim)
+        # if denominator is zero, we have to return 0., otherwise the output of the aggregator will be NaN (0/0).
+        # if the denominator is zero, the numerator will be a tensor containing a zero, so we can directly return the
+        # numerator avoiding of creating a new tensor containing a zero
+        if denominator == 0.:
+            return numerator
         return 1. - torch.pow(torch.div(numerator, denominator), 1 / p)
