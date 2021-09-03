@@ -172,7 +172,7 @@ test_loader = DataSampler(data_te, batch_size=512, shuffle=False)
 Likes = ltn.Predicate(MatrixFactorizationLTN(n_users, n_items, n_factors=3))
 train_loss = 0.0
 train_error = []
-a, b, c, d, f3_l, f4_l, f5_l, f6_l, f7_l, f4_l_bis, f7_l_bis, f4_l_tris, l_w_g_l, l2_w_g_l = [], [], [], [], [], [], [], [], [], [], [], [], [], []
+a, b, c, d, f3_l, f4_l, f5_l, f6_l, f7_l, f4_l_bis, f7_l_bis, f4_l_tris, l_w_g_l, l2_w_g_l, f_l = [], [], [], [], [], [], [], [], [], [], [], [], [], [], []
 frac = 0
 ones = torch.ones((n_users, n_users))
 p = ltn.Predicate(lambda_func=lambda args: ones[args[0], args[1]])
@@ -244,12 +244,13 @@ for (batch_idx, (rows, cols, gt)) in enumerate(train_loader):
         f4_l_tris.append(f4_tris)
         l_w_g_l.append(l_w_g)
         l2_w_g_l.append(l2_w_g)
-        ltn.diag([users, users2, items])
+        ltn.diag([users, users2, items, ratings])
+        f_l.append(Eq([Likes([users, items]), ratings]))
         a.append(Sim([users, users2]))
         b.append(Likes([users, items]))
         c.append(Likes([users2, items]))
         d.append(Implies(And(Sim([users, users2]), Likes([users, items])), Likes([users2, items])))
-        ltn.undiag([users, users2, items])
+        ltn.undiag([users, users2, items, ratings])
         axioms = torch.stack([f3])
         sat_agg = formula_agg(axioms, dim=0)
         loss = 1. - sat_agg
@@ -261,8 +262,19 @@ for (batch_idx, (rows, cols, gt)) in enumerate(train_loader):
 
 train_loss = train_loss / len(train_loader)
 train_rmse = compute_rmse(train_error)
+# TODO l'1 per il per ogni e lo 0 per l'esiste vengono aggiunti dopo aver fatto l'aggregazione per rimuovere tutti i NaN
+# quindi non ci sono problemi in realta' a livello di aggregazione. L'aggregazione funziona come deve funzionare. Il
+# problema riscontrato e' solamente un problema di visualizzazione, perche' effettuo la media sui batch e quindi sui
+# risultati dell'aggregazione. Bisogna pensare quale e' l'effetto di mettere degli 1 sul output per l'apprendimento
+# alla loss arrivano anche gli uni. Non so se questo sia un problema. In effetti 1 significa formula soddisfatta e il
+# per ogni e' soddisfatto quando e' chiamato sul vuoto.
+# quando nessuno dei valori soddisfa la condizione, mi arriva un 1 sul per ogni, quindi una formula pienamente
+# soddisfatta e la loss capisce che non deve fare nulla per cambiare i gradienti. Questo in teoria e' corretto perche'
+# non deve toccare nulla per quegli utenti che non sono abbastanza simili
 #print("Epoch %d | Train loss %.3f | Train RMSE %.3f | f1 SAT %.3f | f2 SAT %.3f | f3 SAT %.3f | f4 SAT %.3f" % (-1, train_loss, train_rmse, torch.mean(torch.stack(formulas_dict['f1'])), torch.mean(torch.stack(formulas_dict['f2'])), torch.mean(torch.stack(formulas_dict['f3'])), torch.mean(torch.stack(formulas_dict['f4']))))
 print("The rule is: Sim(u1, u2) and Likes(u1, i) -> Likes(u2, i) and the p used for quantification is %d" % param)
+print("-----")
+print("Mean value of Eq([Likes([users, items]), ratings]): %.3f" % torch.mean(torch.cat(f_l)))
 print("-----")
 print("Mean value of Sim(u1, u2): %.3f" % torch.mean(torch.cat(a)))
 print("Mean value of Forall (u1, u2) Sim(u1, u2) (no guarded): %.3f" % torch.mean(torch.stack(f7_l_bis)))

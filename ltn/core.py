@@ -593,13 +593,12 @@ class WrapperQuantifier:
             # The result of the aggregation operator in such case is often not defined (e.g. nan).
             # We replace the result with 0.0 if the semantics of the aggregator is exists,
             # or 1.0 if the semantics of the aggregator is forall.
-            # TODO questa cosa e' stata rimossa perche' non si utilizzano il massimo e il minimo come aggregatori
-            #empty_quantifier = 1. if self.quantification_type == "forall" else 0.
-            #output = torch.where(
-            #    torch.isnan(output),
-            #    empty_quantifier,
-            #    output
-            #)
+            empty_quantifier = 1. if self.quantification_type == "forall" else 0.
+            output = torch.where(
+                torch.isnan(output),
+                empty_quantifier,
+                output
+            )
         else:  # in this case, the guarded quantification has not to be performed
             # aggregation_dims are the dimensions on which the aggregation has to be performed
             # the aggregator aggregates only on the axes given by aggregations_dims
