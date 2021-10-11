@@ -94,28 +94,28 @@ def main():
 
     # Fixed variables (they do not change their values during training)
     # These variables represent the 10 labels that a MNIST digit can belong to
-    d1 = ltn.variable("digits1", range(10))
-    d2 = ltn.variable("digits2", range(10))
+    d1 = ltn.Variable("digits1", torch.tensor(range(10)))
+    d2 = ltn.Variable("digits2", torch.tensor(range(10)))
 
     # Operators
-    And = ltn.WrapperConnective(ltn.fuzzy_ops.AndProd())
-    Forall = ltn.WrapperQuantifier(ltn.fuzzy_ops.AggregPMeanError(), quantification_type="forall")
-    Exists = ltn.WrapperQuantifier(ltn.fuzzy_ops.AggregPMean(), quantification_type="exists")
+    And = ltn.Connective(ltn.fuzzy_ops.AndProd())
+    Forall = ltn.Quantifier(ltn.fuzzy_ops.AggregPMeanError(), quantifier="f")
+    Exists = ltn.Quantifier(ltn.fuzzy_ops.AggregPMean(), quantifier="e")
 
     # this function defines the variables and the axioms that need to be used to train the predicate Digit
     # it returns the satisfaction level of the given knowledge base (axioms)
     # see the example in the paper to understand the axiom used in this knowledge base
     def axioms(operand_images, addition_label, p_schedule=2):
-        images_x = ltn.variable("x", operand_images[:, 0])
-        images_y = ltn.variable("y", operand_images[:, 1])
-        labels_z = ltn.variable("z", addition_label)
+        images_x = ltn.Variable("x", operand_images[:, 0])
+        images_y = ltn.Variable("y", operand_images[:, 1])
+        labels_z = ltn.Variable("z", addition_label)
         return Forall(
-            ltn.diag([images_x, images_y, labels_z]),
+            ltn.diag(images_x, images_y, labels_z),
             Exists(
                 [d1, d2],
-                And(Digit([images_x, d1]), Digit([images_y, d2])),
-                mask_vars=[d1, d2, labels_z],
-                mask_fn=lambda vars: torch.eq(vars[0] + vars[1], vars[2]),
+                And(Digit(images_x, d1), Digit(images_y, d2)),
+                cond_vars=[d1, d2, labels_z],
+                cond_fn=lambda vars: torch.eq(vars[0].value + vars[1].value, vars[2].value),
                 p=p_schedule
             ),
             p=2
@@ -149,7 +149,7 @@ def main():
         # train step
         for batch_idx, (operand_images, addition_label) in enumerate(train_loader):
             optimizer.zero_grad()
-            sat_agg = axioms(operand_images, addition_label, p_schedule=p)
+            sat_agg = axioms(operand_images, addition_label, p_schedule=p).value
             loss = 1. - sat_agg
             loss.backward()
             optimizer.step()
@@ -166,7 +166,7 @@ def main():
 
         # test step
         for batch_idx, (operand_images, addition_label) in enumerate(test_loader):
-            sat_agg = axioms(operand_images, addition_label, p_schedule=p)
+            sat_agg = axioms(operand_images, addition_label, p_schedule=p).value
             loss = 1. - sat_agg
             test_loss += loss.item()
             test_sat += sat_agg
