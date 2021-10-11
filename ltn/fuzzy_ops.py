@@ -1,12 +1,12 @@
 import torch
 import numpy as np
 """
-This module of the LTN project contains the PyTorch implementation of some common fuzzy logic operators. Refer to the
+This module of the LTN framework contains the PyTorch implementation of some common fuzzy logic operators. Refer to the
 LTN paper for a detailed description of these operators (see the Appendix).
 The operators support the traditional NumPy/PyTorch broadcasting.
 
 In order to use these fuzzy operators with LTN formulas (broadcasting w.r.t. LTN variables appearing in a formula), 
-it is necessary to wrap the operators with `ltn.WrapperConnective` or `ltn.WrapperQuantifier`. 
+it is necessary to wrap the operators with `ltn.Connective` or `ltn.Quantifier`. 
 """
 
 # these are the projection functions to make the Product Real Logic stable. These functions help to change the input
@@ -61,12 +61,11 @@ class NotGodel:
     """
     def __call__(self, x):
         """
-        Method __call__ for the Godel fuzzy negation operator.
+        Method __call__ for the Goedel fuzzy negation operator.
         :param x: the input truth value;
-        :return: the Godel negation of the input.
+        :return: the Goedel negation of the input.
         """
-        zeros = torch.zeros_like(x)
-        return torch.equal(x, zeros)
+        return torch.eq(x, 0.)
 
 # CONJUNCTION
 
@@ -77,10 +76,10 @@ class AndMin:
     """
     def __call__(self, x, y):
         """
-        Method __call__ for the Godel fuzzy conjunction operator.
+        Method __call__ for the Goedel fuzzy conjunction operator.
         :param x: the truth value of the first input;
         :param y: the truth value of the second input;
-        :return: the Godel conjunction of the two inputs.
+        :return: the Goedel conjunction of the two inputs.
         """
         return torch.minimum(x, y)
 
@@ -130,14 +129,14 @@ class AndLuk:
 
 class OrMax:
     """
-    Implementation of the Goedel fuzzy disjunction (max operator).
+    Implementation of the Godel fuzzy disjunction (max operator).
     """
     def __call__(self, x, y):
         """
-        Method __call__ for the Goedel fuzzy disjunction operator.
+        Method __call__ for the Godel fuzzy disjunction operator.
         :param x: the truth value of the first input;
         :param y: the truth value of the second input.
-        :return: the Goedel disjunction of the two inputs.
+        :return: the Godel disjunction of the two inputs.
         """
         return torch.maximum(x, y)
 
@@ -323,6 +322,8 @@ class AggregMin:
         :return: the result of the mean aggregation. The shape of the result depends on the variables that are used
         in the quantification (namely, the dimensions across which the aggregation has been computed).
         """
+        # we have to put 1 where there are NaN values, since 1 is the maximum value for a truth value. By doing so,
+        # this modification will not affect the minimum computation
         xs = torch.where(torch.eq(xs, np.nan), 1., xs.double())
         out = torch.min(xs.float(), dim=dim, keepdim=keepdim)
         if isinstance(out, tuple):
@@ -373,7 +374,7 @@ class AggregPMean:
         Method __call__ for the p-mean aggregator operator. Notice the use of torch.nansum(). This has to be used
         because the guarded quantification is implemented in PyTorch by putting NaN values where the grounding of the
         formula does not satisfy the guarded condition. Therefore, if we aggregate on a tensor with NaN values, it is
-        highly probable that we will obtain NaN as the output of the aggregation. For this reason, the aggregation do
+        highly probable that we will obtain NaN as the output of the aggregation. For this reason, the aggregation does
         not have to consider the NaN values contained in the input tensor.
         :param xs: the truth values (grounding of formula) for which the aggregation has to be computed;
         :param dim: the axes on which the aggregation has to be performed;
